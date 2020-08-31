@@ -10,6 +10,7 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <math.h>
+#include <string.h>
 
 #define OP_HAMMING_TO_ASCII(weight, offset) (weight + 'P' - offset)
 
