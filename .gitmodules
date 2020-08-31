@@ -1,6 +1,3 @@
-[submodule "modules/openssl"]
-	path = modules/openssl
-	url = https://github.com/openssl/openssl/
 [submodule "modules/tiny-AES-c"]
 	path = modules/tiny-AES-c
 	url = https://github.com/kokke/tiny-AES-c
