@@ -63,7 +63,7 @@ void sum_weights(uint32_t weights[], int a[], uint32_t words, uint32_t len)
     uint32_t w0, w1, w2, w3, weight;
     size_t t0, x0;
 
-    for (size_t t = 0; t < len; t += words)
+    for (size_t t = 0; t < len * words; t += words)
     {
         t0 = t / words;
         weight = 0;
@@ -168,10 +168,11 @@ CMD_err_t *tdc(const CMD_cmd_t *cmd)
     int delay_idx = CMD_opt_find(cmd->options, 'd');
     int verbose = CMD_opt_find(cmd->options, 'v') != -1;
 
-    uint64_t current_delay;
     int calibration = calibrate_idx != -1;
     int delay = delay_idx != -1;
     int raw = raw_idx != -1;
+    uint64_t current_delay;
+    uint32_t words = (XTDC_ConfigTable[0].CountTdc * XTDC_ConfigTable[0].SamplingLen) / 32;
 
     if (delay)
     {
@@ -198,7 +199,12 @@ CMD_err_t *tdc(const CMD_cmd_t *cmd)
     }
     else
     {
-        printf("value: %08lx\n", XTDC_ReadWeight(tdc_inst.Config.BaseAddr, -1));
+        printf("value: %08lx ", XTDC_ReadAll(tdc_inst.Config.BaseAddr, 0));
+        for (size_t offset = 1; offset < XTDC_ConfigTable[0].CountTdc / 4 ; offset++)
+        {
+            printf("%08lx ", XTDC_ReadAll(tdc_inst.Config.BaseAddr, offset));
+        }
+        printf("\n");
     }
 
     return NULL;
@@ -211,9 +217,9 @@ void fifo_flush()
 
 void fifo_read(int verbose, int start, int end)
 {
-    uint32_t words = (XTDC_ConfigTable[0].CountTdc * XTDC_ConfigTable[0].SamplinLen) / 32;
+    uint32_t words = (XTDC_ConfigTable[0].CountTdc * XTDC_ConfigTable[0].SamplingLen) / 32;
     uint32_t *weights = malloc(32 * (end - start) * words);
-    int len = XFIFO_Read(&fifo_inst, weights, (uint32_t)start, (uint32_t)end, words) * words;
+    int len = XFIFO_Read(&fifo_inst, weights, (uint32_t)start, (uint32_t)end, words);
 
     sum_weights(weights, NULL, words, len);
     printf("samples: %d\n", len);

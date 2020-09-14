@@ -7,7 +7,7 @@ set INC_X 0
 # Y slice offset increment per sensor, must be multiple of 8
 set INC_Y 8
 
-set COUNT_SENSORS get_property count_tdc_g [get_cells system_i/tdc_bank_0]
+set COUNT_SENSORS get_property count_tdc_g [get_cells system_i/tdc_bank_0/U0/tdc_bank_v1_0_S_AXI_inst/top]
 
 # Slices name
 proc slice {x y} {
