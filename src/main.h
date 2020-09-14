@@ -2,7 +2,6 @@
 #include <limits.h>
 #include <cmd/hex.h>
 #include <cmd/run.h>
-#include "op.h"
 #include <aes.h>
 #include "xparameters.h"
 #include "xaes.h"
@@ -10,88 +9,130 @@
 #include "xtdc.h"
 #define SCA_PROJECT_VERSION "1.1.0"
 
-#define XFIFO_STACK_SIZE 8192
-
 XAES aes_inst;
 XFIFO fifo_inst;
 XTDC tdc_inst;
 
-void tiny_aes(uint8_t *block, const uint8_t *key, int inv, int acq, int verbose)
-{
-    struct AES_ctx ctx;
-    char buffer[9 * AES_BLOCKLEN + 3];
+char buffer[512];
+uint32_t key[XAES_WORDS_SIZE], block[XAES_WORDS_SIZE];
+uint8_t key8[AES_BLOCKLEN], block8[AES_BLOCKLEN];
+struct AES_ctx ctx;
 
+static void AesHwHandler(void *CallBackRef)
+{
+    XAES_Run(&aes_inst);
+}
+
+static void AesSwDecryptHandler(void *CallBackRef)
+{
+    AES_ECB_decrypt(&ctx, block8);
+}
+
+static void AesSwEncryptHandler(void *CallBackRef)
+{
+    AES_ECB_encrypt(&ctx, block8);
+}
+
+void weights_to_ascii(char *str, uint32_t *weights, size_t len, char offset)
+{
+    for (size_t t = 0; t < len; t++)
+    {
+        str[t] = weights[t] + 'P' - offset;
+    }
+    str[len] = '\0';
+}
+
+void weights_to_string(char *str, uint32_t *weights, size_t len)
+{
+    if (len == 0)
+    {
+        return;
+    }
+
+    char *ptr = str;
+    for (size_t t = 0; t < len - 1; t++)
+    {
+        sprintf(ptr, "%lu,", weights[t]);
+        ptr += strlen(ptr);
+    }
+    sprintf(ptr, "%lu", weights[len - 1]);
+}
+
+void sum_weights(uint32_t weights[], int a[], uint32_t words, uint32_t len)
+{
+    uint32_t w0, w1, w2, w3, weight;
+    size_t t0, x0;
+
+    for (size_t t = 0; t < len; t += words)
+    {
+        t0 = t / words;
+        weight = 0;
+        for (size_t w = 0; w < words; w++)
+        {
+            x0 = t + w;
+            w0 = weights[x0] & 0xff;
+            w1 = (weights[x0] >> 8) & 0xff;
+            w2 = (weights[x0] >> 16) & 0xff;
+            w3 = (weights[x0] >> 24) & 0xff;
+            if (a == NULL)
+            {
+                weight += w0 + w1 + w2 + w3;
+            }
+            else
+            {
+                weight += a[w] * w0 + a[w + 1] * w1 + a[w + 2] * w2 + a[w + 3] * w3;
+            }
+        }
+        weights[t0] = weight;
+    }
+}
+
+void sw_aes(int inv, int verbose, int end)
+{
     if (verbose)
     {
         printf("mode: sw\n");
-        printf("direction: %s\n", inv ? "decrypt" : "encrypt");
-        printf("key: %s\n", HEX_bytes_to_string(buffer, key, AES_BLOCKLEN));
-        printf("%s: %s\n", inv ? "cipher" : "plain", HEX_bytes_to_string(buffer, block, AES_BLOCKLEN));
+        printf("direction: %s\n", inv ? "dec" : "enc");
+        printf("key: %s\n", HEX_bytes_to_string(buffer, key8, AES_BLOCKLEN));
+        printf("%s: %s\n", inv ? "ciphers" : "plains", HEX_bytes_to_string(buffer, block8, AES_BLOCKLEN));
     }
 
     if (inv)
     {
-        AES_init_ctx_iv(&ctx, key, block);
+        AES_init_ctx_iv(&ctx, key8, block8);
     }
     else
     {
-        AES_init_ctx(&ctx, key);
+        AES_init_ctx(&ctx, key8);
     }
 
-    if (acq && inv)
-    {
-        XFIFO_Reset(&fifo_inst, XFIFO_MODE_SW);
-        XFIFO_StartWrite(fifo_inst.Config.BaseAddr);
-        AES_ECB_decrypt(&ctx, block);
-        XFIFO_StopWrite(fifo_inst.Config.BaseAddr);
-    }
-    else if (acq && !inv)
-    {
-        XFIFO_Reset(&fifo_inst, XFIFO_MODE_SW);
-        XFIFO_StartWrite(fifo_inst.Config.BaseAddr);
-        AES_ECB_encrypt(&ctx, block);
-        XFIFO_StopWrite(fifo_inst.Config.BaseAddr);
-    }
-    else if (!acq && inv)
-    {
-        AES_ECB_decrypt(&ctx, block);
-    }
-    else
-    {
-        AES_ECB_encrypt(&ctx, block);
-    }
-    printf("%s: %s\n", inv ? "plain" : "cipher", HEX_bytes_to_string(buffer, block, AES_BLOCKLEN));
+    fifo_inst.Mode = XFIFO_MODE_SW;
+    XFIFO_Reset(&fifo_inst);
+    XFIFO_Write(&fifo_inst, end, (XFIFO_WrAction)(inv ? AesSwDecryptHandler : AesSwEncryptHandler));
+
+    printf("%s: %s\n", inv ? "plains" : "ciphers", HEX_bytes_to_string(buffer, block8, AES_BLOCKLEN));
 }
 
-void hw_aes(uint32_t *block, const uint32_t *key, int inv, int acq, int verbose)
+void hw_aes(int inv, int verbose, int end)
 {
-    char block_str[9 * XAES_BYTES_SIZE + 3], key_str[9 * XAES_BYTES_SIZE + 3];
-
     if (verbose)
     {
         printf("mode: hw\n");
-        printf("direction: %s\n", inv ? "decrypt" : "encrypt");
-        printf("key: %s\n", HEX_words_to_string(key_str, key, XAES_WORDS_SIZE));
-        printf("%s: %s\n", inv ? "cipher" : "plain", HEX_words_to_string(block_str, block, XAES_WORDS_SIZE));
+        printf("direction: %s\n", inv ? "dec" : "enc");
+        printf("keys: %s\n", HEX_words_to_string(buffer, key, XAES_WORDS_SIZE));
+        printf("%s: %s\n", inv ? "ciphers" : "plains", HEX_words_to_string(buffer, block, XAES_WORDS_SIZE));
     }
 
     XAES_Reset(&aes_inst, inv ? XAES_DECRYPT : XAES_ENCRYPT);
     XAES_SetKey(&aes_inst, key);
     XAES_SetInput(&aes_inst, block);
-    if (acq)
-    {
-        XFIFO_Reset(&fifo_inst, XFIFO_MODE_HW);
-        XFIFO_StartWrite(fifo_inst.Config.BaseAddr);
-        XAES_Run(&aes_inst);
-        XFIFO_StopWrite(fifo_inst.Config.BaseAddr);
-    }
-    else
-    {
-        XAES_Run(&aes_inst);
-    }
+
+    fifo_inst.Mode = XFIFO_MODE_HW;
+    XFIFO_Reset(&fifo_inst);
+    XFIFO_Write(&fifo_inst, end, (XFIFO_WrAction)AesHwHandler);
 
     XAES_GetOutput(&aes_inst, block);
-    printf("%s: %s\n", inv ? "plain" : "cipher", HEX_words_to_string(block_str, block, XAES_WORDS_SIZE));
+    printf("%s: %s\n", inv ? "plains" : "ciphers", HEX_words_to_string(buffer, block, XAES_WORDS_SIZE));
 }
 
 CMD_err_t *aes(const CMD_cmd_t *cmd)
@@ -99,23 +140,23 @@ CMD_err_t *aes(const CMD_cmd_t *cmd)
     int data_idx = CMD_opt_find(cmd->options, 'd');
     int key_idx = CMD_opt_find(cmd->options, 'k');
     int hw = CMD_opt_find(cmd->options, 'h') != -1;
-    int acq = CMD_opt_find(cmd->options, 'a') != -1;
     int inv = CMD_opt_find(cmd->options, 'i') != -1;
     int verbose = CMD_opt_find(cmd->options, 'v') != -1;
+    int end = CMD_opt_find(cmd->options, 'e');
+
+    end = end != -1 ? cmd->options[end].value.integer : XFIFO_ConfigTable[0].Depth;
 
     if (hw)
     {
-        uint32_t key[XAES_WORDS_SIZE], block[XAES_WORDS_SIZE];
         HEX_bytes_to_words(key, cmd->options[key_idx].value.bytes, XAES_BYTES_SIZE);
         HEX_bytes_to_words(block, cmd->options[data_idx].value.bytes, XAES_BYTES_SIZE);
-        hw_aes(block, key, inv, acq, verbose);
+        hw_aes(inv, verbose, end);
     }
     else
     {
-        uint8_t key[AES_BLOCKLEN], block[AES_BLOCKLEN];
-        memcpy(key, cmd->options[key_idx].value.bytes, AES_BLOCKLEN);
-        memcpy(block, cmd->options[data_idx].value.bytes, AES_BLOCKLEN);
-        tiny_aes(block, key, inv, acq, verbose);
+        memcpy(key8, cmd->options[key_idx].value.bytes, AES_BLOCKLEN);
+        memcpy(block8, cmd->options[data_idx].value.bytes, AES_BLOCKLEN);
+        sw_aes(inv, verbose, end);
     }
     return NULL;
 }
@@ -165,88 +206,113 @@ CMD_err_t *tdc(const CMD_cmd_t *cmd)
 
 void fifo_flush()
 {
-    XFIFO_Reset(&fifo_inst, XFIFO_MODE_SW);
+    XFIFO_Reset(&fifo_inst);
 }
 
-void fifo_read(int verbose)
+void fifo_read(int verbose, int start, int end)
 {
-    uint32_t weights[XFIFO_STACK_SIZE];
-    int len = XFIFO_Read(&fifo_inst, weights, XFIFO_STACK_SIZE);
+    uint32_t words = (XTDC_ConfigTable[0].CountTdc * XTDC_ConfigTable[0].SamplinLen) / 32;
+    uint32_t *weights = malloc(32 * (end - start) * words);
+    int len = XFIFO_Read(&fifo_inst, weights, (uint32_t)start, (uint32_t)end, words) * words;
 
-    for (size_t i = 0; i < len; i++)
-    {
-        weights[i] = OP_sum_weights(weights[i], NULL);
-    }
-
+    sum_weights(weights, NULL, words, len);
     printf("samples: %d\n", len);
     if (len == 0)
     {
         return;
     }
+    char *str = malloc((verbose ? 4 : 1) * (end - start) * sizeof(char) + 1);
     if (verbose)
     {
-        char str[4 * XFIFO_STACK_SIZE + 16] = "";
-        OP_weights_to_string(str, weights, len);
+        weights_to_string(str, weights, len);
         printf("weights: %s\n", str);
     }
     else
     {
-        char str[XFIFO_STACK_SIZE + 16] = "";
-        OP_weights_to_ascii(str, weights, len, XTDC_ConfigTable[0].CountTdc * XTDC_ConfigTable[0].SamplingLen * 2);
+        weights_to_ascii(str, weights, len, XTDC_Offset(XTDC_ConfigTable[0].CountTdc, XTDC_ConfigTable[0].SamplingLen));
         printf("code: %s\n", str);
     }
+    free(str);
+    free(weights);
+}
+
+void fifo_acquire(int end)
+{
+    fifo_inst.Mode = XFIFO_MODE_SW;
+    XFIFO_Reset(&fifo_inst);
+    XFIFO_Write(&fifo_inst, end, NULL);
 }
 
 CMD_err_t *fifo(const CMD_cmd_t *cmd)
 {
     int flush = CMD_opt_find(cmd->options, 'f') != -1;
     int verbose = CMD_opt_find(cmd->options, 'v') != -1;
+    int acquire = CMD_opt_find(cmd->options, 'a') != -1;
+    int start = CMD_opt_find(cmd->options, 's');
+    int end = CMD_opt_find(cmd->options, 'e');
 
-    if (flush != -1)
+    start = start != -1 ? cmd->options[start].value.integer : 0;
+    end = end != -1 ? cmd->options[end].value.integer : XFIFO_ConfigTable[0].Depth;
+
+    if (flush)
     {
         fifo_flush();
     }
 
-    fifo_read(verbose);
+    if (acquire)
+    {
+        fifo_acquire(end);
+    }
 
+    fifo_read(verbose, start, end);
     return NULL;
 }
 
 CMD_err_t *sca(const CMD_cmd_t *cmd)
 {
-    int traces_idx = CMD_opt_find(cmd->options, 't');
+    int iterations = cmd->options[CMD_opt_find(cmd->options, 't')].value.integer;
     int hw = CMD_opt_find(cmd->options, 'h') != -1;
     int inv = CMD_opt_find(cmd->options, 'i') != -1;
     int verbose = CMD_opt_find(cmd->options, 'v') != -1;
-    int iterations = cmd->options[traces_idx].value.integer;
-    char buffer[9 * AES_BLOCKLEN + 3];
-    uint32_t key[XAES_WORDS_SIZE], block[XAES_WORDS_SIZE];
-    uint8_t key8[AES_BLOCKLEN], block8[AES_BLOCKLEN];
+    int raw = CMD_opt_find(cmd->options, 'r') != -1;
+    int start = CMD_opt_find(cmd->options, 's');
+    int end = CMD_opt_find(cmd->options, 'e');
 
     HEX_random_words(key, INT_MAX, XAES_WORDS_SIZE);
     HEX_words_to_bytes(key8, key, AES_BLOCKLEN);
 
+    start = start != -1 ? cmd->options[start].value.integer : 0;
+    end = end != -1 ? cmd->options[end].value.integer : XFIFO_ConfigTable[0].Depth;
+
     printf("sensors: %d\n", XTDC_ConfigTable[0].CountTdc);
-    printf("target: %d\n", XTDC_ConfigTable[0].SamplingLen * 2);
+    printf("target: %d\n", XTDC_Offset(1, XTDC_ConfigTable[0].SamplingLen));
     printf("mode: %s\n", hw ? "hw" : "sw");
-    printf("direction: %s\n", inv ? "decrypt" : "encrypt");
-    printf("key: %s\n", HEX_words_to_string(buffer, key, XAES_WORDS_SIZE));
-    for (int idx = 0; idx < iterations; idx++)
+    printf("direction: %s\n", inv ? "dec" : "enc");
+    printf("keys: %s\n", HEX_words_to_string(buffer, key, XAES_WORDS_SIZE));
+
+    for (int d = 0; d < iterations; d++)
     {
+        if (raw)
+        {
+            printf("\xfd\xfd\xfd\xfd\n");
+            fifo_acquire(end);
+            fifo_read(verbose, start, end);
+        }
         printf("\xfe\xfe\xfe\xfe\n");
-        HEX_random_words(block, idx + 1, XAES_WORDS_SIZE);
-        printf("%s: %s\n", inv ? "cipher" : "plain", HEX_words_to_string(buffer, block, XAES_WORDS_SIZE));
+        HEX_random_words(block, d + 1, XAES_WORDS_SIZE);
+        printf("%s: %s\n", inv ? "ciphers" : "plains", HEX_words_to_string(buffer, block, XAES_WORDS_SIZE));
         if (hw)
         {
-            hw_aes(block, key, inv, 1, 0);
+            hw_aes(inv, 0, end);
         }
         else
         {
             HEX_words_to_bytes(block8, block, AES_BLOCKLEN);
-            tiny_aes(block8, key8, inv, 1, 0);
+            sw_aes(inv, 0, end);
         }
-        fifo_read(verbose);
+        fifo_read(verbose, start, end);
     }
+    fifo_flush();
     printf("\xff\xff\xff\xff\n");
     return NULL;
 }
