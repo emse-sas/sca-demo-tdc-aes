@@ -37,7 +37,19 @@ void weights_to_ascii(char *str, uint32_t *weights, size_t len, char offset)
 {
     for (size_t t = 0; t < len; t++)
     {
-        str[t] = weights[t] + 'P' - offset;
+    	if(weights[t] + 'P' <= offset)
+    	{
+    		str[t] = 1;
+
+    	}
+    	else if(weights[t] + 'P' - offset >= 255)
+    	{
+			str[t] = 255;
+    	}
+    	else
+    	{
+    		str[t] = (weights[t] + 'P') - offset;
+    	}
     }
     str[len] = '\0';
 }
@@ -91,10 +103,10 @@ void sw_aes(int inv, int verbose, int end)
 {
     if (verbose)
     {
-        printf("mode: sw\n");
-        printf("direction: %s\n", inv ? "dec" : "enc");
-        printf("key: %s\n", HEX_bytes_to_string(buffer, key8, AES_BLOCKLEN));
-        printf("%s: %s\n", inv ? "ciphers" : "plains", HEX_bytes_to_string(buffer, block8, AES_BLOCKLEN));
+        printf("mode: sw;;\n");
+        printf("direction: %s;;\n", inv ? "dec" : "enc");
+        printf("key: %s;;\n", HEX_bytes_to_string(buffer, key8, AES_BLOCKLEN));
+        printf("%s: %s;;\n", inv ? "ciphers" : "plains", HEX_bytes_to_string(buffer, block8, AES_BLOCKLEN));
     }
 
     if (inv)
@@ -110,17 +122,17 @@ void sw_aes(int inv, int verbose, int end)
     XFIFO_Reset(&fifo_inst);
     XFIFO_Write(&fifo_inst, end, (XFIFO_WrAction)(inv ? AesSwDecryptHandler : AesSwEncryptHandler));
 
-    printf("%s: %s\n", inv ? "plains" : "ciphers", HEX_bytes_to_string(buffer, block8, AES_BLOCKLEN));
+    printf("%s: %s;;\n", inv ? "plains" : "ciphers", HEX_bytes_to_string(buffer, block8, AES_BLOCKLEN));
 }
 
 void hw_aes(int inv, int verbose, int end)
 {
     if (verbose)
     {
-        printf("mode: hw\n");
-        printf("direction: %s\n", inv ? "dec" : "enc");
-        printf("keys: %s\n", HEX_words_to_string(buffer, key, XAES_WORDS_SIZE));
-        printf("%s: %s\n", inv ? "ciphers" : "plains", HEX_words_to_string(buffer, block, XAES_WORDS_SIZE));
+        printf("mode: hw;;\n");
+        printf("direction: %s;;\n", inv ? "dec" : "enc");
+        printf("keys: %s;;\n", HEX_words_to_string(buffer, key, XAES_WORDS_SIZE));
+        printf("%s: %s;;\n", inv ? "ciphers" : "plains", HEX_words_to_string(buffer, block, XAES_WORDS_SIZE));
     }
 
     XAES_Reset(&aes_inst, inv ? XAES_DECRYPT : XAES_ENCRYPT);
@@ -132,7 +144,7 @@ void hw_aes(int inv, int verbose, int end)
     XFIFO_Write(&fifo_inst, end, (XFIFO_WrAction)AesHwHandler);
 
     XAES_GetOutput(&aes_inst, block);
-    printf("%s: %s\n", inv ? "plains" : "ciphers", HEX_words_to_string(buffer, block, XAES_WORDS_SIZE));
+    printf("%s: %s;;\n", inv ? "plains" : "ciphers", HEX_words_to_string(buffer, block, XAES_WORDS_SIZE));
 }
 
 CMD_err_t *aes(const CMD_cmd_t *cmd)
@@ -187,14 +199,14 @@ CMD_err_t *tdc(const CMD_cmd_t *cmd)
     if (verbose || calibration)
     {
         current_delay = XTDC_ReadDelay(&tdc_inst, -1);
-        printf("delay: 0x%08x%08x\n", (unsigned int)(current_delay >> 32), (unsigned int)current_delay);
+        printf("delay: 0x%08x%08x;;\n", (unsigned int)(current_delay >> 32), (unsigned int)current_delay);
     }
 
     if (raw)
     {
         int id = cmd->options[raw_idx].value.integer;
         XTDC_SetId(tdc_inst.Config.BaseAddr, id);
-        printf("raw %d: %08lx\n", id, XTDC_ReadRaw(tdc_inst.Config.BaseAddr));
+        printf("raw %d: %08lx;;\n", id, XTDC_ReadRaw(tdc_inst.Config.BaseAddr));
         return NULL;
     }
     else
@@ -204,7 +216,7 @@ CMD_err_t *tdc(const CMD_cmd_t *cmd)
         {
             printf("%08lx ", XTDC_ReadAll(tdc_inst.Config.BaseAddr, offset));
         }
-        printf("\n");
+        printf(";;\n");
     }
 
     return NULL;
@@ -222,7 +234,7 @@ void fifo_read(int verbose, int start, int end)
     int len = XFIFO_Read(&fifo_inst, weights, (uint32_t)start, (uint32_t)end, words);
 
     sum_weights(weights, NULL, words, len);
-    printf("samples: %d\n", len);
+    printf("samples: %d;;\n", len);
     if (len == 0)
     {
         return;
@@ -231,12 +243,12 @@ void fifo_read(int verbose, int start, int end)
     if (verbose)
     {
         weights_to_string(str, weights, len);
-        printf("weights: %s\n", str);
+        xil_printf("weights: %s;;\r\n", str);
     }
     else
     {
         weights_to_ascii(str, weights, len, XTDC_Offset(XTDC_ConfigTable[0].CountTdc, XTDC_ConfigTable[0].SamplingLen));
-        printf("code: %s\n", str);
+        xil_printf("code: %s;;\r\n", str);
     }
     free(str);
     free(weights);
@@ -290,23 +302,23 @@ CMD_err_t *sca(const CMD_cmd_t *cmd)
     start = start != -1 ? cmd->options[start].value.integer : 0;
     end = end != -1 ? cmd->options[end].value.integer : XFIFO_ConfigTable[0].Depth;
 
-    printf("sensors: %d\n", XTDC_ConfigTable[0].CountTdc);
-    printf("target: %d\n", XTDC_Offset(1, XTDC_ConfigTable[0].SamplingLen));
-    printf("mode: %s\n", hw ? "hw" : "sw");
-    printf("direction: %s\n", inv ? "dec" : "enc");
-    printf("keys: %s\n", HEX_words_to_string(buffer, key, XAES_WORDS_SIZE));
+    printf("sensors: %d;;\n", XTDC_ConfigTable[0].CountTdc);
+    printf("target: %d;;\n", XTDC_Offset(1, XTDC_ConfigTable[0].SamplingLen));
+    printf("mode: %s;;\n", hw ? "hw" : "sw");
+    printf("direction: %s;;\n", inv ? "dec" : "enc");
+    printf("keys: %s;;\n", HEX_words_to_string(buffer, key, XAES_WORDS_SIZE));
 
     for (int d = 0; d < iterations; d++)
     {
         if (raw)
         {
-            printf("\xfd\xfd\xfd\xfd\n");
+            printf("\xfd\xfd\xfd\xfd;;\n");
             fifo_acquire(end);
             fifo_read(verbose, start, end);
         }
-        printf("\xfe\xfe\xfe\xfe\n");
+        printf("\xfe\xfe\xfe\xfe;;\n");
         HEX_random_words(block, d + 1, XAES_WORDS_SIZE);
-        printf("%s: %s\n", inv ? "ciphers" : "plains", HEX_words_to_string(buffer, block, XAES_WORDS_SIZE));
+        printf("%s: %s;;\n", inv ? "ciphers" : "plains", HEX_words_to_string(buffer, block, XAES_WORDS_SIZE));
         if (hw)
         {
             hw_aes(inv, 0, end);
@@ -319,6 +331,6 @@ CMD_err_t *sca(const CMD_cmd_t *cmd)
         fifo_read(verbose, start, end);
     }
     fifo_flush();
-    printf("\xff\xff\xff\xff\n");
+    printf("\xff\xff\xff\xff;;\n");
     return NULL;
 }
