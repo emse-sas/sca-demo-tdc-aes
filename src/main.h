@@ -33,32 +33,26 @@ static void AesSwEncryptHandler(void *CallBackRef)
     AES_ECB_encrypt(&ctx, block8);
 }
 
-void weights_to_ascii(char *str, uint32_t *weights, size_t len, char offset)
+char* weights_to_ascii(char *str, uint32_t *weights, size_t len, char offset)
 {
     for (size_t t = 0; t < len; t++)
     {
-    	if(weights[t] + 'P' <= offset)
+    	if(weights[t] > 0)
     	{
-    		str[t] = 1;
-
+    		str[t] = weights[t];
+    		continue;
     	}
-    	else if(weights[t] + 'P' - offset >= 255)
-    	{
-			str[t] = 255;
-    	}
-    	else
-    	{
-    		str[t] = (weights[t] + 'P') - offset;
-    	}
+    	str[t] = 1;
     }
     str[len] = '\0';
+    return str;
 }
 
-void weights_to_string(char *str, uint32_t *weights, size_t len)
+char* weights_to_string(char *str, uint32_t *weights, size_t len)
 {
     if (len == 0)
     {
-        return;
+        return str;
     }
 
     char *ptr = str;
@@ -68,6 +62,7 @@ void weights_to_string(char *str, uint32_t *weights, size_t len)
         ptr += strlen(ptr);
     }
     sprintf(ptr, "%lu", weights[len - 1]);
+    return str;
 }
 
 void sum_weights(uint32_t weights[], int a[], uint32_t words, uint32_t len)
@@ -103,10 +98,10 @@ void sw_aes(int inv, int verbose, int end)
 {
     if (verbose)
     {
-        printf("mode: sw;;\n");
-        printf("direction: %s;;\n", inv ? "dec" : "enc");
-        printf("key: %s;;\n", HEX_bytes_to_string(buffer, key8, AES_BLOCKLEN));
-        printf("%s: %s;;\n", inv ? "ciphers" : "plains", HEX_bytes_to_string(buffer, block8, AES_BLOCKLEN));
+        printf("mode: sw\n");
+        printf("direction: %s\n", inv ? "dec" : "enc");
+        printf("key: %s\n", HEX_bytes_to_string(buffer, key8, AES_BLOCKLEN));
+        printf("%s: %s\n", inv ? "ciphers" : "plains", HEX_bytes_to_string(buffer, block8, AES_BLOCKLEN));
     }
 
     if (inv)
@@ -129,10 +124,10 @@ void hw_aes(int inv, int verbose, int end)
 {
     if (verbose)
     {
-        printf("mode: hw;;\n");
-        printf("direction: %s;;\n", inv ? "dec" : "enc");
-        printf("keys: %s;;\n", HEX_words_to_string(buffer, key, XAES_WORDS_SIZE));
-        printf("%s: %s;;\n", inv ? "ciphers" : "plains", HEX_words_to_string(buffer, block, XAES_WORDS_SIZE));
+        printf("mode: hw\n");
+        printf("direction: %s\n", inv ? "dec" : "enc");
+        printf("keys: %s\n", HEX_words_to_string(buffer, key, XAES_WORDS_SIZE));
+        printf("%s: %s\n", inv ? "ciphers" : "plains", HEX_words_to_string(buffer, block, XAES_WORDS_SIZE));
     }
 
     XAES_Reset(&aes_inst, inv ? XAES_DECRYPT : XAES_ENCRYPT);
@@ -184,7 +179,6 @@ CMD_err_t *tdc(const CMD_cmd_t *cmd)
     int delay = delay_idx != -1;
     int raw = raw_idx != -1;
     uint64_t current_delay;
-    uint32_t words = (XTDC_ConfigTable[0].CountTdc * XTDC_ConfigTable[0].SamplingLen) / 32;
 
     if (delay)
     {
@@ -199,14 +193,14 @@ CMD_err_t *tdc(const CMD_cmd_t *cmd)
     if (verbose || calibration)
     {
         current_delay = XTDC_ReadDelay(&tdc_inst, -1);
-        printf("delay: 0x%08x%08x;;\n", (unsigned int)(current_delay >> 32), (unsigned int)current_delay);
+        printf("delay: 0x%08x%08x\n", (unsigned int)(current_delay >> 32), (unsigned int)current_delay);
     }
 
     if (raw)
     {
         int id = cmd->options[raw_idx].value.integer;
         XTDC_SetId(tdc_inst.Config.BaseAddr, id);
-        printf("raw %d: %08lx;;\n", id, XTDC_ReadRaw(tdc_inst.Config.BaseAddr));
+        printf("raw %d: %08lx\n", id, XTDC_ReadRaw(tdc_inst.Config.BaseAddr));
         return NULL;
     }
     else
@@ -216,7 +210,7 @@ CMD_err_t *tdc(const CMD_cmd_t *cmd)
         {
             printf("%08lx ", XTDC_ReadAll(tdc_inst.Config.BaseAddr, offset));
         }
-        printf(";;\n");
+        printf("\n");
     }
 
     return NULL;
@@ -232,6 +226,7 @@ void fifo_read(int verbose, int start, int end)
     uint32_t words = (XTDC_ConfigTable[0].CountTdc * XTDC_ConfigTable[0].SamplingLen) / 32;
     uint32_t *weights = malloc(32 * (end - start) * words);
     int len = XFIFO_Read(&fifo_inst, weights, (uint32_t)start, (uint32_t)end, words);
+    char offset = XTDC_Offset(XTDC_ConfigTable[0].CountTdc, XTDC_ConfigTable[0].SamplingLen);
 
     sum_weights(weights, NULL, words, len);
     printf("samples: %d;;\n", len);
@@ -242,13 +237,11 @@ void fifo_read(int verbose, int start, int end)
     char *str = malloc((verbose ? 4 : 1) * (end - start) * sizeof(char) + 1);
     if (verbose)
     {
-        weights_to_string(str, weights, len);
-        xil_printf("weights: %s;;\r\n", str);
+        printf("weights: %s;;\n", weights_to_string(str, weights, len));
     }
     else
     {
-        weights_to_ascii(str, weights, len, XTDC_Offset(XTDC_ConfigTable[0].CountTdc, XTDC_ConfigTable[0].SamplingLen));
-        xil_printf("code: %s;;\r\n", str);
+        printf("code: %s;;\n", weights_to_ascii(str, weights, len, offset));
     }
     free(str);
     free(weights);
