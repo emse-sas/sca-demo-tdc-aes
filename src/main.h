@@ -37,7 +37,7 @@ char* weights_to_ascii(char *str, uint32_t *weights, size_t len, char offset)
 {
     for (size_t t = 0; t < len; t++)
     {
-    	if(weights[t] > 0)
+    	if(weights[t] != '\0')
     	{
     		str[t] = weights[t];
     		continue;
