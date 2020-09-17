@@ -18,6 +18,8 @@ uint32_t key[XAES_WORDS_SIZE], block[XAES_WORDS_SIZE];
 uint8_t key8[AES_BLOCKLEN], block8[AES_BLOCKLEN];
 struct AES_ctx ctx;
 
+int seed = 1;
+
 static void AesHwHandler(void *CallBackRef)
 {
     XAES_Run(&aes_inst);
@@ -310,7 +312,7 @@ CMD_err_t *sca(const CMD_cmd_t *cmd)
             fifo_read(verbose, start, end);
         }
         printf("\xfe\xfe\xfe\xfe;;\n");
-        HEX_random_words(block, d + 1, XAES_WORDS_SIZE);
+        HEX_random_words(block, seed, XAES_WORDS_SIZE);
         printf("%s: %s;;\n", inv ? "ciphers" : "plains", HEX_words_to_string(buffer, block, XAES_WORDS_SIZE));
         if (hw)
         {
@@ -322,6 +324,7 @@ CMD_err_t *sca(const CMD_cmd_t *cmd)
             sw_aes(inv, 0, end);
         }
         fifo_read(verbose, start, end);
+        seed++;
     }
     fifo_flush();
     printf("\xff\xff\xff\xff;;\n");
