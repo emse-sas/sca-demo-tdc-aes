@@ -6,12 +6,14 @@
 #include "xparameters.h"
 #include "xaes.h"
 #include "xfifo.h"
+// #include "xro.h"
 #include "xtdc.h"
 #define SCA_PROJECT_VERSION "1.1.0"
 
 XAES aes_inst;
 XFIFO fifo_inst;
 XTDC tdc_inst;
+// XRO ro_inst;
 
 char buffer[512];
 uint32_t key[XAES_WORDS_SIZE], block[XAES_WORDS_SIZE];
@@ -35,22 +37,27 @@ static void AesSwEncryptHandler(void *CallBackRef)
     AES_ECB_encrypt(&ctx, block8);
 }
 
-char* weights_to_ascii(char *str, uint32_t *weights, size_t len, char offset)
+char *weights_to_ascii(char *str, uint32_t *weights, size_t len, char offset)
 {
     for (size_t t = 0; t < len; t++)
     {
-    	if(weights[t] != '\0')
-    	{
-    		str[t] = weights[t];
-    		continue;
-    	}
-    	str[t] = 1;
+        if (weights[t] > 255)
+        {
+            str = 255;
+            continue;
+        }
+
+        str[t] = weights[t];
+        if (str[t] == '\0' || str[t] == '\n' || str[t] == '\r')
+        {
+            str[t]++;
+        }
     }
     str[len] = '\0';
     return str;
 }
 
-char* weights_to_string(char *str, uint32_t *weights, size_t len)
+char *weights_to_string(char *str, uint32_t *weights, size_t len)
 {
     if (len == 0)
     {
@@ -173,13 +180,13 @@ CMD_err_t *aes(const CMD_cmd_t *cmd)
 CMD_err_t *tdc(const CMD_cmd_t *cmd)
 {
     int calibrate_idx = CMD_opt_find(cmd->options, 'c');
-    int raw_idx = CMD_opt_find(cmd->options, 'r');
+    int state_idx = CMD_opt_find(cmd->options, 's');
     int delay_idx = CMD_opt_find(cmd->options, 'd');
     int verbose = CMD_opt_find(cmd->options, 'v') != -1;
 
     int calibration = calibrate_idx != -1;
     int delay = delay_idx != -1;
-    int raw = raw_idx != -1;
+    int state = state_idx != -1;
     uint64_t current_delay;
 
     if (delay)
@@ -198,25 +205,42 @@ CMD_err_t *tdc(const CMD_cmd_t *cmd)
         printf("delay: 0x%08x%08x\n", (unsigned int)(current_delay >> 32), (unsigned int)current_delay);
     }
 
-    if (raw)
+    if (state)
     {
-        int id = cmd->options[raw_idx].value.integer;
+        int id = cmd->options[state_idx].value.integer;
         XTDC_SetId(tdc_inst.Config.BaseAddr, id);
-        printf("raw %d: %08lx\n", id, XTDC_ReadRaw(tdc_inst.Config.BaseAddr));
+        printf("state %d: %08lx\n", id, XTDC_ReadState(tdc_inst.Config.BaseAddr));
         return NULL;
     }
     else
     {
-        printf("value: %08lx ", XTDC_ReadAll(tdc_inst.Config.BaseAddr, 0));
-        for (size_t offset = 1; offset < XTDC_ConfigTable[0].CountTdc / 4 ; offset++)
-        {
-            printf("%08lx ", XTDC_ReadAll(tdc_inst.Config.BaseAddr, offset));
-        }
-        printf("\n");
+        printf("data: %ld\n", XTDC_ReadData(tdc_inst.Config.BaseAddr));
     }
 
     return NULL;
 }
+/*
+CMD_err_t *ro(const CMD_cmd_t *cmd)
+{
+    int raw_idx = CMD_opt_find(cmd->options, 'r');
+    int verbose = CMD_opt_find(cmd->options, 'v') != -1;
+    int raw = raw_idx != -1;
+
+    if (raw)
+    {
+        int id = cmd->options[raw_idx].value.integer;
+        XRO_SetId(ro_inst.Config.BaseAddr, id);
+        printf("state %d: %08lx\n", id, XRO_ReadState(ro_inst.Config.BaseAddr));
+        return NULL;
+    }
+    else
+    {
+        printf("value: %08lx\n", XRO_Read(ro_inst.Config.BaseAddr));
+    }
+
+    return NULL;
+}
+*/
 
 void fifo_flush()
 {
@@ -225,12 +249,10 @@ void fifo_flush()
 
 void fifo_read(int verbose, int start, int end)
 {
-    uint32_t words = (XTDC_ConfigTable[0].CountTdc * XTDC_ConfigTable[0].SamplingLen) / 32;
-    uint32_t *weights = malloc(32 * (end - start) * words);
-    int len = XFIFO_Read(&fifo_inst, weights, (uint32_t)start, (uint32_t)end, words);
-    char offset = XTDC_Offset(XTDC_ConfigTable[0].CountTdc, XTDC_ConfigTable[0].SamplingLen);
+    uint32_t *weights = malloc(32 * (end - start));
+    int len = XFIFO_Read(&fifo_inst, weights, (uint32_t)start, (uint32_t)end, 1);
+    char offset = XTDC_Offset(XTDC_ConfigTable[0].Count, XTDC_ConfigTable[0].Depth);
 
-    sum_weights(weights, NULL, words, len);
     printf("samples: %d;;\n", len);
     if (len == 0)
     {
@@ -297,8 +319,8 @@ CMD_err_t *sca(const CMD_cmd_t *cmd)
     start = start != -1 ? cmd->options[start].value.integer : 0;
     end = end != -1 ? cmd->options[end].value.integer : XFIFO_ConfigTable[0].Depth;
 
-    printf("sensors: %d;;\n", XTDC_ConfigTable[0].CountTdc);
-    printf("target: %d;;\n", XTDC_Offset(1, XTDC_ConfigTable[0].SamplingLen));
+    printf("sensors: %d;;\n", XTDC_ConfigTable[0].Count);
+    printf("target: %d;;\n", XTDC_Offset(1, XTDC_ConfigTable[0].Depth));
     printf("mode: %s;;\n", hw ? "hw" : "sw");
     printf("direction: %s;;\n", inv ? "dec" : "enc");
     printf("keys: %s;;\n", HEX_words_to_string(buffer, key, XAES_WORDS_SIZE));
