@@ -1,4 +1,4 @@
-# X initial slice offset
+deo# X initial slice offset
 set TDC_OFFSET_X 0
 # Y initial slice offset
 set TDC_OFFSET_Y 35
@@ -7,7 +7,7 @@ set TDC_INC_X 0
 # Y slice offset increment per tdc, must be multiple of 8
 set TDC_INC_Y 8
 
-set TDC_COUNT_SENSORS 4
+set TDC_COUNT_SENSORS 8
 set TDC_DEPTH_SENSORS 8
 # Slices name
 proc slice {x y} {
