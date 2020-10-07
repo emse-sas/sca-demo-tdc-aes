@@ -53,7 +53,7 @@ set design_name system
 
 # If you do not already have an existing IP Integrator design open,
 # you can create a design using the following command:
-create_bd_design $design_name
+#    create_bd_design $design_name
 
 # Creating design if needed
 set errMsg ""
@@ -245,6 +245,7 @@ proc create_root_design { parentCell } {
   set fifo_generator_0 [ create_bd_cell -type ip -vlnv xilinx.com:ip:fifo_generator:13.2 fifo_generator_0 ]
   set_property -dict [ list \
    CONFIG.Data_Count_Width {13} \
+   CONFIG.Enable_Reset_Synchronization {true} \
    CONFIG.Enable_Safety_Circuit {false} \
    CONFIG.Fifo_Implementation {Independent_Clocks_Block_RAM} \
    CONFIG.Full_Flags_Reset_Value {1} \
@@ -254,8 +255,13 @@ proc create_root_design { parentCell } {
    CONFIG.Input_Depth {8192} \
    CONFIG.Output_Data_Width {32} \
    CONFIG.Output_Depth {8192} \
+   CONFIG.Programmable_Empty_Type {No_Programmable_Empty_Threshold} \
+   CONFIG.Programmable_Full_Type {Single_Programmable_Full_Threshold_Input_Port} \
    CONFIG.Read_Data_Count_Width {13} \
+   CONFIG.Reset_Pin {true} \
    CONFIG.Reset_Type {Asynchronous_Reset} \
+   CONFIG.Use_Dout_Reset {true} \
+   CONFIG.Write_Data_Count {true} \
    CONFIG.Write_Data_Count_Width {13} \
  ] $fifo_generator_0
 
@@ -1092,19 +1098,22 @@ proc create_root_design { parentCell } {
   # Create port connections
   connect_bd_net -net aes_0_done_o [get_bd_pins aes_0/done_o] [get_bd_pins fifo_ctrl_0/done_i]
   connect_bd_net -net aes_0_start_o [get_bd_pins aes_0/start_o] [get_bd_pins fifo_ctrl_0/start_i]
-  connect_bd_net -net clk_wiz_0_clk_acq [get_bd_pins clk_wiz_0/clk_acq] [get_bd_pins fifo_ctrl_0/clock_wr_i] [get_bd_pins fifo_generator_0/wr_clk] [get_bd_pins tdc_bank_0/clock_i]
+  connect_bd_net -net clk_wiz_0_clk_acq [get_bd_pins clk_wiz_0/clk_acq] [get_bd_pins fifo_generator_0/wr_clk] [get_bd_pins tdc_bank_0/clock_i]
   connect_bd_net -net clk_wiz_0_clk_aes [get_bd_pins aes_0/clock_i] [get_bd_pins clk_wiz_0/clk_aes]
   connect_bd_net -net clk_wiz_0_clk_delta [get_bd_pins clk_wiz_0/clk_delta] [get_bd_pins tdc_bank_0/delta_i]
   connect_bd_net -net fifo_ctrl_0_read_o [get_bd_pins fifo_ctrl_0/read_o] [get_bd_pins fifo_generator_0/rd_en]
   connect_bd_net -net fifo_ctrl_0_reset_o [get_bd_pins fifo_ctrl_0/reset_o] [get_bd_pins fifo_generator_0/rst]
+  connect_bd_net -net fifo_ctrl_0_threshold_o [get_bd_pins fifo_ctrl_0/threshold_o] [get_bd_pins fifo_generator_0/prog_full_thresh]
   connect_bd_net -net fifo_ctrl_0_write_o [get_bd_pins fifo_ctrl_0/write_o] [get_bd_pins fifo_generator_0/wr_en]
   connect_bd_net -net fifo_generator_0_dout [get_bd_pins fifo_ctrl_0/data_i] [get_bd_pins fifo_generator_0/dout]
   connect_bd_net -net fifo_generator_0_empty [get_bd_pins fifo_ctrl_0/empty_i] [get_bd_pins fifo_generator_0/empty]
   connect_bd_net -net fifo_generator_0_full [get_bd_pins fifo_ctrl_0/full_i] [get_bd_pins fifo_generator_0/full]
-  connect_bd_net -net processing_system7_0_FCLK_CLK0 [get_bd_pins aes_0/s_axi_aclk] [get_bd_pins clk_wiz_0/clk_in1] [get_bd_pins fifo_ctrl_0/clock_rd_i] [get_bd_pins fifo_ctrl_0/s_axi_aclk] [get_bd_pins fifo_generator_0/rd_clk] [get_bd_pins processing_system7_0/FCLK_CLK0] [get_bd_pins processing_system7_0/M_AXI_GP0_ACLK] [get_bd_pins ps7_0_axi_periph/ACLK] [get_bd_pins ps7_0_axi_periph/M00_ACLK] [get_bd_pins ps7_0_axi_periph/M01_ACLK] [get_bd_pins ps7_0_axi_periph/M02_ACLK] [get_bd_pins ps7_0_axi_periph/S00_ACLK] [get_bd_pins rst_ps7_0_50M/slowest_sync_clk] [get_bd_pins tdc_bank_0/s_axi_aclk]
+  connect_bd_net -net fifo_generator_0_prog_full [get_bd_pins fifo_ctrl_0/reached_i] [get_bd_pins fifo_generator_0/prog_full]
+  connect_bd_net -net fifo_generator_0_wr_data_count [get_bd_pins fifo_ctrl_0/count_i] [get_bd_pins fifo_generator_0/wr_data_count]
+  connect_bd_net -net processing_system7_0_FCLK_CLK0 [get_bd_pins aes_0/s_axi_aclk] [get_bd_pins clk_wiz_0/clk_in1] [get_bd_pins fifo_ctrl_0/clock_i] [get_bd_pins fifo_ctrl_0/s_axi_aclk] [get_bd_pins fifo_generator_0/rd_clk] [get_bd_pins processing_system7_0/FCLK_CLK0] [get_bd_pins processing_system7_0/M_AXI_GP0_ACLK] [get_bd_pins ps7_0_axi_periph/ACLK] [get_bd_pins ps7_0_axi_periph/M00_ACLK] [get_bd_pins ps7_0_axi_periph/M01_ACLK] [get_bd_pins ps7_0_axi_periph/M02_ACLK] [get_bd_pins ps7_0_axi_periph/S00_ACLK] [get_bd_pins rst_ps7_0_50M/slowest_sync_clk] [get_bd_pins tdc_bank_0/s_axi_aclk]
   connect_bd_net -net reset_rtl_0_1 [get_bd_ports reset_rtl] [get_bd_pins clk_wiz_0/reset] [get_bd_pins rst_ps7_0_50M/ext_reset_in]
   connect_bd_net -net rst_ps7_0_50M_peripheral_aresetn [get_bd_pins aes_0/s_axi_aresetn] [get_bd_pins fifo_ctrl_0/s_axi_aresetn] [get_bd_pins ps7_0_axi_periph/ARESETN] [get_bd_pins ps7_0_axi_periph/M00_ARESETN] [get_bd_pins ps7_0_axi_periph/M01_ARESETN] [get_bd_pins ps7_0_axi_periph/M02_ARESETN] [get_bd_pins ps7_0_axi_periph/S00_ARESETN] [get_bd_pins rst_ps7_0_50M/peripheral_aresetn] [get_bd_pins tdc_bank_0/s_axi_aresetn]
-  connect_bd_net -net tdc_bank_0_weights_o [get_bd_pins fifo_generator_0/din] [get_bd_pins tdc_bank_0/data_o]
+  connect_bd_net -net tdc_bank_0_data_o [get_bd_pins fifo_generator_0/din] [get_bd_pins tdc_bank_0/data_o]
 
   # Create address segments
   assign_bd_address -offset 0x43C00000 -range 0x00010000 -target_address_space [get_bd_addr_spaces processing_system7_0/Data] [get_bd_addr_segs aes_0/S_AXI/S_AXI_reg] -force

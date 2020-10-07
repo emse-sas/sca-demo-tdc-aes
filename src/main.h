@@ -43,7 +43,7 @@ char *weights_to_ascii(char *str, uint32_t *weights, size_t len, char offset)
     {
         if (weights[t] > 255)
         {
-            str[t] = 255;
+                str[t] = 255;
             continue;
         }
 
