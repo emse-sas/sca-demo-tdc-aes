@@ -2,7 +2,8 @@
 #include <limits.h>
 #include <cmd/hex.h>
 #include <cmd/run.h>
-#include <aes.h>
+#include <tiny-AES-c/aes.h>
+#include <openssl/aes.h>
 #include "xparameters.h"
 #include "xaes.h"
 #include "xfifo.h"
@@ -16,9 +17,12 @@ XTDC tdc_inst;
 // XRO ro_inst;
 
 char buffer[512];
-uint32_t key[XAES_WORDS_SIZE], block[XAES_WORDS_SIZE];
-uint8_t key8[AES_BLOCKLEN], block8[AES_BLOCKLEN];
-struct AES_ctx ctx;
+uint32_t key_hw[XAES_WORDS_SIZE], block_hw[XAES_WORDS_SIZE];
+uint8_t key_tiny[AES_BLOCKLEN], block_tiny[AES_BLOCKLEN];
+unsigned char in_ssl[AES_BLOCK_SIZE], out_ssl[AES_BLOCK_SIZE], key_ssl[AES_BLOCK_SIZE];
+AES_KEY key32_ssl;
+
+struct AES_ctx ctx_tiny;
 
 int seed = 1;
 
@@ -27,14 +31,24 @@ static void AesHwHandler(void *CallBackRef)
     XAES_Run(&aes_inst);
 }
 
-static void AesSwDecryptHandler(void *CallBackRef)
+static void AesTinyDecryptHandler(void *CallBackRef)
 {
-    AES_ECB_decrypt(&ctx, block8);
+    AES_ECB_decrypt(&ctx_tiny, block_tiny);
 }
 
-static void AesSwEncryptHandler(void *CallBackRef)
+static void AesTinyEncryptHandler(void *CallBackRef)
 {
-    AES_ECB_encrypt(&ctx, block8);
+    AES_ECB_encrypt(&ctx_tiny, block_tiny);
+}
+
+static void AesSslDecryptHandler(void *CallBackRef)
+{
+    AES_decrypt(in_ssl, out_ssl, &key32_ssl);
+}
+
+static void AesSslEncryptHandler(void *CallBackRef)
+{
+    AES_encrypt(in_ssl, out_ssl, &key32_ssl);
 }
 
 char *weights_to_ascii(char *str, uint32_t *weights, size_t len, char offset)
@@ -43,7 +57,7 @@ char *weights_to_ascii(char *str, uint32_t *weights, size_t len, char offset)
     {
         if (weights[t] > 255)
         {
-                str[t] = 255;
+            str[t] = 255;
             continue;
         }
 
@@ -74,59 +88,56 @@ char *weights_to_string(char *str, uint32_t *weights, size_t len)
     return str;
 }
 
-void sum_weights(uint32_t weights[], int a[], uint32_t words, uint32_t len)
-{
-    uint32_t w0, w1, w2, w3, weight;
-    size_t t0, x0;
-
-    for (size_t t = 0; t < len * words; t += words)
-    {
-        t0 = t / words;
-        weight = 0;
-        for (size_t w = 0; w < words; w++)
-        {
-            x0 = t + w;
-            w0 = weights[x0] & 0xff;
-            w1 = (weights[x0] >> 8) & 0xff;
-            w2 = (weights[x0] >> 16) & 0xff;
-            w3 = (weights[x0] >> 24) & 0xff;
-            if (a == NULL)
-            {
-                weight += w0 + w1 + w2 + w3;
-            }
-            else
-            {
-                weight += a[w] * w0 + a[w + 1] * w1 + a[w + 2] * w2 + a[w + 3] * w3;
-            }
-        }
-        weights[t0] = weight;
-    }
-}
-
-void sw_aes(int inv, int verbose, int end)
+void tiny_aes(int inv, int verbose, int end)
 {
     if (verbose)
     {
-        printf("mode: sw\n");
+        printf("mode: tiny\n");
         printf("direction: %s\n", inv ? "dec" : "enc");
-        printf("key: %s\n", HEX_bytes_to_string(buffer, key8, AES_BLOCKLEN));
-        printf("%s: %s\n", inv ? "ciphers" : "plains", HEX_bytes_to_string(buffer, block8, AES_BLOCKLEN));
+        printf("key: %s\n", HEX_bytes_to_string(buffer, key_tiny, AES_BLOCKLEN));
+        printf("%s: %s\n", inv ? "ciphers" : "plains", HEX_bytes_to_string(buffer, block_tiny, AES_BLOCKLEN));
     }
 
     if (inv)
     {
-        AES_init_ctx_iv(&ctx, key8, block8);
+        AES_init_ctx_iv(&ctx_tiny, key_tiny, block_tiny);
     }
     else
     {
-        AES_init_ctx(&ctx, key8);
+        AES_init_ctx(&ctx_tiny, key_tiny);
     }
 
     fifo_inst.Mode = XFIFO_MODE_SW;
     XFIFO_Reset(&fifo_inst);
-    XFIFO_Write(&fifo_inst, end, (XFIFO_WrAction)(inv ? AesSwDecryptHandler : AesSwEncryptHandler));
+    XFIFO_Write(&fifo_inst, end, (XFIFO_WrAction)(inv ? AesTinyDecryptHandler : AesTinyEncryptHandler));
 
-    printf("%s: %s;;\n", inv ? "plains" : "ciphers", HEX_bytes_to_string(buffer, block8, AES_BLOCKLEN));
+    printf("%s: %s;;\n", inv ? "plains" : "ciphers", HEX_bytes_to_string(buffer, block_tiny, AES_BLOCKLEN));
+}
+
+void ssl_aes(int inv, int verbose, int end)
+{
+    if (verbose)
+    {
+        printf("mode: ssl\n");
+        printf("direction: %s\n", inv ? "dec" : "enc");
+        printf("key: %s\n", HEX_words_to_string(buffer, key_ssl, 4));
+        printf("%s: %s\n", inv ? "ciphers" : "plains", HEX_bytes_to_string(buffer, in_ssl, AES_BLOCK_SIZE));
+    }
+
+    if (inv)
+    {
+        AES_set_decrypt_key(key_ssl, 128, &key32_ssl);
+    }
+    else
+    {
+        AES_set_encrypt_key(key_ssl, 128, &key32_ssl);
+    }
+
+    fifo_inst.Mode = XFIFO_MODE_SW;
+    XFIFO_Reset(&fifo_inst);
+    XFIFO_Write(&fifo_inst, end, (XFIFO_WrAction)(inv ? AesSslDecryptHandler : AesSslEncryptHandler));
+
+    printf("%s: %s;;\n", inv ? "plains" : "ciphers", HEX_bytes_to_string(buffer, out_ssl, AES_BLOCK_SIZE));
 }
 
 void hw_aes(int inv, int verbose, int end)
@@ -135,44 +146,55 @@ void hw_aes(int inv, int verbose, int end)
     {
         printf("mode: hw\n");
         printf("direction: %s\n", inv ? "dec" : "enc");
-        printf("keys: %s\n", HEX_words_to_string(buffer, key, XAES_WORDS_SIZE));
-        printf("%s: %s\n", inv ? "ciphers" : "plains", HEX_words_to_string(buffer, block, XAES_WORDS_SIZE));
+        printf("keys: %s\n", HEX_words_to_string(buffer, key_hw, XAES_WORDS_SIZE));
+        printf("%s: %s\n", inv ? "ciphers" : "plains", HEX_words_to_string(buffer, block_hw, XAES_WORDS_SIZE));
     }
 
     XAES_Reset(&aes_inst, inv ? XAES_DECRYPT : XAES_ENCRYPT);
-    XAES_SetKey(&aes_inst, key);
-    XAES_SetInput(&aes_inst, block);
+    XAES_SetKey(&aes_inst, key_hw);
+    XAES_SetInput(&aes_inst, block_hw);
 
     fifo_inst.Mode = XFIFO_MODE_HW;
     XFIFO_Reset(&fifo_inst);
     XFIFO_Write(&fifo_inst, end, (XFIFO_WrAction)AesHwHandler);
 
-    XAES_GetOutput(&aes_inst, block);
-    printf("%s: %s;;\n", inv ? "plains" : "ciphers", HEX_words_to_string(buffer, block, XAES_WORDS_SIZE));
+    XAES_GetOutput(&aes_inst, block_hw);
+    printf("%s: %s;;\n", inv ? "plains" : "ciphers", HEX_words_to_string(buffer, block_hw, XAES_WORDS_SIZE));
 }
 
 CMD_err_t *aes(const CMD_cmd_t *cmd)
 {
     int data_idx = CMD_opt_find(cmd->options, 'd');
     int key_idx = CMD_opt_find(cmd->options, 'k');
-    int hw = CMD_opt_find(cmd->options, 'h') != -1;
+    int mode_idx = CMD_opt_find(cmd->options, 'm');
     int inv = CMD_opt_find(cmd->options, 'i') != -1;
     int verbose = CMD_opt_find(cmd->options, 'v') != -1;
     int end = CMD_opt_find(cmd->options, 'e');
+    char *mode = cmd->options[mode_idx].value.string;
 
     end = end != -1 ? cmd->options[end].value.integer : XFIFO_ConfigTable[0].Depth;
 
-    if (hw)
+    if (!strcmp(mode, "hw"))
     {
-        HEX_bytes_to_words(key, cmd->options[key_idx].value.bytes, XAES_BYTES_SIZE);
-        HEX_bytes_to_words(block, cmd->options[data_idx].value.bytes, XAES_BYTES_SIZE);
+        HEX_bytes_to_words(key_hw, cmd->options[key_idx].value.bytes, XAES_BYTES_SIZE);
+        HEX_bytes_to_words(block_hw, cmd->options[data_idx].value.bytes, XAES_BYTES_SIZE);
         hw_aes(inv, verbose, end);
+    }
+    else if (!strcmp(mode, "tiny"))
+    {
+        memcpy(key_tiny, cmd->options[key_idx].value.bytes, AES_BLOCKLEN);
+        memcpy(block_tiny, cmd->options[data_idx].value.bytes, AES_BLOCKLEN);
+        tiny_aes(inv, verbose, end);
+    }
+    else if (!strcmp(mode, "ssl"))
+    {
+        memcpy(key_ssl, cmd->options[key_idx].value.bytes, AES_BLOCK_SIZE);
+        memcpy(in_ssl, cmd->options[data_idx].value.bytes, AES_BLOCK_SIZE);
+        ssl_aes(inv, verbose, end);
     }
     else
     {
-        memcpy(key8, cmd->options[key_idx].value.bytes, AES_BLOCKLEN);
-        memcpy(block8, cmd->options[data_idx].value.bytes, AES_BLOCKLEN);
-        sw_aes(inv, verbose, end);
+        printf("unrecognized encryption mode: %s", mode);
     }
     return NULL;
 }
@@ -306,24 +328,26 @@ CMD_err_t *fifo(const CMD_cmd_t *cmd)
 CMD_err_t *sca(const CMD_cmd_t *cmd)
 {
     int iterations = cmd->options[CMD_opt_find(cmd->options, 't')].value.integer;
-    int hw = CMD_opt_find(cmd->options, 'h') != -1;
     int inv = CMD_opt_find(cmd->options, 'i') != -1;
     int verbose = CMD_opt_find(cmd->options, 'v') != -1;
     int raw = CMD_opt_find(cmd->options, 'r') != -1;
+    int mode_idx = CMD_opt_find(cmd->options, 'm');
     int start = CMD_opt_find(cmd->options, 's');
     int end = CMD_opt_find(cmd->options, 'e');
+    char *mode = cmd->options[mode_idx].value.string;
 
-    HEX_random_words(key, INT_MAX, XAES_WORDS_SIZE);
-    HEX_words_to_bytes(key8, key, AES_BLOCKLEN);
+    HEX_random_words(key_hw, INT_MAX, XAES_WORDS_SIZE);
+    HEX_words_to_bytes(key_tiny, key_hw, AES_BLOCKLEN);
+    memcpy(key_ssl, key_hw, AES_BLOCK_SIZE);
 
     start = start != -1 ? cmd->options[start].value.integer : 0;
     end = end != -1 ? cmd->options[end].value.integer : XFIFO_ConfigTable[0].Depth;
 
     printf("sensors: %d;;\n", XTDC_ConfigTable[0].Count);
     printf("target: %d;;\n", XTDC_Offset(1, XTDC_ConfigTable[0].Depth));
-    printf("mode: %s;;\n", hw ? "hw" : "sw");
+    printf("mode: %s;;\n", mode);
     printf("direction: %s;;\n", inv ? "dec" : "enc");
-    printf("keys: %s;;\n", HEX_words_to_string(buffer, key, XAES_WORDS_SIZE));
+    printf("keys: %s;;\n", HEX_words_to_string(buffer, key_hw, XAES_WORDS_SIZE));
 
     for (int d = 0; d < iterations; d++)
     {
@@ -334,16 +358,25 @@ CMD_err_t *sca(const CMD_cmd_t *cmd)
             fifo_read(verbose, start, end);
         }
         printf("\xfe\xfe\xfe\xfe;;\n");
-        HEX_random_words(block, seed, XAES_WORDS_SIZE);
-        printf("%s: %s;;\n", inv ? "ciphers" : "plains", HEX_words_to_string(buffer, block, XAES_WORDS_SIZE));
-        if (hw)
+        HEX_random_words(block_hw, seed, XAES_WORDS_SIZE);
+        printf("%s: %s;;\n", inv ? "ciphers" : "plains", HEX_words_to_string(buffer, block_hw, XAES_WORDS_SIZE));
+        if (!strcmp(mode, "hw"))
         {
-            hw_aes(inv, 0, end);
+            hw_aes(inv, verbose, end);
+        }
+        else if (!strcmp(mode, "tiny"))
+        {
+            HEX_words_to_bytes(block_tiny, block_hw, AES_BLOCKLEN);
+            tiny_aes(inv, verbose, end);
+        }
+        else if (!strcmp(mode, "ssl"))
+        {
+            memcpy(in_ssl, block_hw, AES_BLOCK_SIZE);
+            ssl_aes(inv, verbose, end);
         }
         else
         {
-            HEX_words_to_bytes(block8, block, AES_BLOCKLEN);
-            sw_aes(inv, 0, end);
+            printf("unrecognized encryption mode: %s", mode);
         }
         fifo_read(verbose, start, end);
         seed++;

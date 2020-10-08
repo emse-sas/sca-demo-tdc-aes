@@ -14,7 +14,7 @@ int main(int argc, char *argv[])
     CMD_descr_cmd_t sca_cmd = CMD_descr_cmd("sca", &sca, "AES Side-channel FIFO acquisition.");
 
     CMD_descr_push_opt(&aes_cmd, CMD_descr_opt('v', CMD_OPT_NONE, 1, "Verbose output."));
-    CMD_descr_push_opt(&aes_cmd, CMD_descr_opt('h', CMD_OPT_NONE, 1, "Perform hardware AES."));
+    CMD_descr_push_opt(&aes_cmd, CMD_descr_opt('m', CMD_OPT_STRING, 0, "AES encryption mode."));
     CMD_descr_push_opt(&aes_cmd, CMD_descr_opt('i', CMD_OPT_NONE, 1, "Perform inverse AES encryption."));
     CMD_descr_push_opt(&aes_cmd, CMD_descr_opt('k', CMD_OPT_BYTES, 0, "AES key block."));
     CMD_descr_push_opt(&aes_cmd, CMD_descr_opt('d', CMD_OPT_BYTES, 0, "AES data block."));
@@ -35,7 +35,7 @@ int main(int argc, char *argv[])
     CMD_descr_push_opt(&fifo_cmd, CMD_descr_opt('a', CMD_OPT_NONE, 1, "Perform FIFO acquisition."));
 
     CMD_descr_push_opt(&sca_cmd, CMD_descr_opt('v', CMD_OPT_NONE, 1, "Verbose output."));
-    CMD_descr_push_opt(&sca_cmd, CMD_descr_opt('h', CMD_OPT_NONE, 1, "Perform hardware AES."));
+    CMD_descr_push_opt(&sca_cmd, CMD_descr_opt('m', CMD_OPT_STRING, 0,  "AES encryption mode."));
     CMD_descr_push_opt(&sca_cmd, CMD_descr_opt('i', CMD_OPT_NONE, 1, "Perform inverse AES encryption."));
     CMD_descr_push_opt(&sca_cmd, CMD_descr_opt('t', CMD_OPT_INT, 0, "Count of AES iterations."));
     CMD_descr_push_opt(&sca_cmd, CMD_descr_opt('s', CMD_OPT_INT, 1, "Starting index to read the FIFO."));
