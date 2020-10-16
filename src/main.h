@@ -75,6 +75,7 @@ static void AesDhuertasDecryptHandler(void *CallBackRef)
 
 static void AesSBoxEncryptHandler(void *CallBackRef)
 {
+    // TODO implement only SBOX operation
 }
 
 char *weights_to_ascii(char *str, uint32_t *weights, size_t len)
@@ -422,6 +423,7 @@ CMD_err_t *sca(const CMD_cmd_t *cmd)
     start = start != -1 ? cmd->options[start].value.integer : 0;
     end = end != -1 ? cmd->options[end].value.integer : XFIFO_ConfigTable[0].Depth;
     id = id != -1 ? cmd->options[id].value.integer : 0;
+
 #ifdef SCABOX_RO
     printf("sensors: %d;;\n", XRO_ConfigTable[0].Count);
 #endif
