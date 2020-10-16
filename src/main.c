@@ -73,6 +73,8 @@ int main(int argc, char *argv[])
 #ifdef SCABOX_RO
     XRO_CfgInitialize(&ro_inst, &XRO_ConfigTable[0]);
 #endif
+
+    init_perfcounters(1,0);
     if ((error = CMD_run(&tab)) != NULL)
     {
         fprintf(stderr, "%s\n", error->message);

@@ -29,12 +29,11 @@ XRO ro_inst;
 
 char buffer[512];
 uint32_t key_hw[XAES_WORDS_SIZE], block_hw[XAES_WORDS_SIZE];
-uint8_t key_tiny[AES_BLOCKLEN], block_tiny[AES_BLOCKLEN];
+uint8_t key_tiny[16], in_tiny[16], out_tiny[16];
 unsigned char in_ssl[AES_BLOCK_SIZE], out_ssl[AES_BLOCK_SIZE], key_ssl[AES_BLOCK_SIZE];
 uint8_t in_dhuertas[16], out_dhuertas[16], key_dhuertas[16];
 
 AES_KEY key32_ssl;
-struct AES_ctx ctx_tiny;
 uint8_t ctx_dhuertas;
 
 int seed = 1;
@@ -46,12 +45,12 @@ static void AesHwHandler(void *CallBackRef)
 
 static void AesTinyDecryptHandler(void *CallBackRef)
 {
-    AES_ECB_decrypt(&ctx_tiny, block_tiny);
+    AES_ECB_decrypt(in_tiny, key_tiny, out_tiny, 16);
 }
 
 static void AesTinyEncryptHandler(void *CallBackRef)
 {
-    AES_ECB_encrypt(&ctx_tiny, block_tiny);
+    AES_ECB_encrypt(in_tiny, key_tiny, out_tiny, 16);
 }
 
 static void AesSslDecryptHandler(void *CallBackRef)
@@ -74,7 +73,7 @@ static void AesDhuertasDecryptHandler(void *CallBackRef)
     aes_inv_cipher(in_dhuertas, out_dhuertas, ctx_dhuertas);
 }
 
-static vois AesSBoxEncryptHandler(void *CallBackRef)
+static void AesSBoxEncryptHandler(void *CallBackRef)
 {
 }
 
@@ -151,24 +150,15 @@ void tiny_aes(int inv, int verbose, int end, int id)
     {
         printf("mode: tiny\n");
         printf("direction: %s\n", inv ? "dec" : "enc");
-        printf("key: %s\n", HEX_bytes_to_string(buffer, key_tiny, AES_BLOCKLEN));
-        printf("%s: %s\n", inv ? "ciphers" : "plains", HEX_bytes_to_string(buffer, block_tiny, AES_BLOCKLEN));
-    }
-
-    if (inv)
-    {
-        AES_init_ctx_iv(&ctx_tiny, key_tiny, block_tiny);
-    }
-    else
-    {
-        AES_init_ctx(&ctx_tiny, key_tiny);
+        printf("key: %s\n", HEX_bytes_to_string(buffer, key_tiny, 16));
+        printf("%s: %s\n", inv ? "ciphers" : "plains", HEX_bytes_to_string(buffer, in_tiny, 16));
     }
 
     fifo_inst[id].Mode = XFIFO_MODE_SW;
     XFIFO_Reset(&fifo_inst[id]);
     XFIFO_Write(&fifo_inst[id], end, (XFIFO_WrAction)(inv ? AesTinyDecryptHandler : AesTinyEncryptHandler));
 
-    printf("%s: %s;;\n", inv ? "plains" : "ciphers", HEX_bytes_to_string(buffer, block_tiny, AES_BLOCKLEN));
+    printf("%s: %s;;\n", inv ? "plains" : "ciphers", HEX_bytes_to_string(buffer, out_tiny, 16));
 }
 
 void ssl_aes(int inv, int verbose, int end, int id)
@@ -261,8 +251,8 @@ CMD_err_t *aes(const CMD_cmd_t *cmd)
     }
     else if (!strcmp(mode, "tiny"))
     {
-        memcpy(key_tiny, cmd->options[key_idx].value.bytes, AES_BLOCKLEN);
-        memcpy(block_tiny, cmd->options[data_idx].value.bytes, AES_BLOCKLEN);
+        memcpy(key_tiny, cmd->options[key_idx].value.bytes, 16);
+        memcpy(in_tiny, cmd->options[data_idx].value.bytes, 16);
         tiny_aes(inv, verbose, end, id);
     }
     else if (!strcmp(mode, "ssl"))
@@ -425,15 +415,20 @@ CMD_err_t *sca(const CMD_cmd_t *cmd)
     char *mode = cmd->options[mode_idx].value.string;
 
     HEX_random_words(key_hw, INT_MAX, XAES_WORDS_SIZE);
-    HEX_words_to_bytes(key_tiny, key_hw, AES_BLOCKLEN);
+    HEX_words_to_bytes(key_tiny, key_hw, 16);
     memcpy(key_ssl, key_hw, AES_BLOCK_SIZE);
     memcpy(key_dhuertas, key_hw, AES_BLOCK_SIZE);
 
     start = start != -1 ? cmd->options[start].value.integer : 0;
     end = end != -1 ? cmd->options[end].value.integer : XFIFO_ConfigTable[0].Depth;
     id = id != -1 ? cmd->options[id].value.integer : 0;
-
+#ifdef SCABOX_RO
     printf("sensors: %d;;\n", XRO_ConfigTable[0].Count);
+#endif
+#ifdef SCABOX_TDC
+    printf("sensors: %d;;\n", XTDC_ConfigTable[0].Count);
+#endif
+
     printf("target: %d;;\n", 0);
     printf("mode: %s;;\n", mode);
     printf("direction: %s;;\n", inv ? "dec" : "enc");
@@ -456,7 +451,7 @@ CMD_err_t *sca(const CMD_cmd_t *cmd)
         }
         else if (!strcmp(mode, "tiny"))
         {
-            HEX_words_to_bytes(block_tiny, block_hw, AES_BLOCKLEN);
+            HEX_words_to_bytes(in_tiny, block_hw, 16);
             tiny_aes(inv, verbose, end, id);
         }
         else if (!strcmp(mode, "ssl"))
