@@ -1,7 +1,7 @@
 # X initial slice offset
-set TDC_OFFSET_X 0
+set TDC_OFFSET_X 3
 # Y initial slice offset
-set TDC_OFFSET_Y 25
+set TDC_OFFSET_Y 17
 # X slice offset increment per tdc, must be multiple of 2
 set TDC_INC_X 0
 # Y slice offset increment per tdc, must be multiple of 8

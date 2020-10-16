@@ -4,25 +4,30 @@
 #include <cmd/run.h>
 #include <tiny-AES-c/aes.h>
 #include <openssl/aes.h>
+#include <AES/aes.h>
+
 #include "xparameters.h"
 #include "xaes.h"
 #include "xfifo.h"
-// #include "xro.h"
-#include "xtdc.h"
+#include "xro.h"
+
+// #include "xtdc.h"
 #define SCA_PROJECT_VERSION "1.1.0"
 
 XAES aes_inst;
-XFIFO fifo_inst;
-XTDC tdc_inst;
-// XRO ro_inst;
+XFIFO fifo_inst[2];
+// XTDC tdc_inst;
+XRO ro_inst;
 
 char buffer[512];
 uint32_t key_hw[XAES_WORDS_SIZE], block_hw[XAES_WORDS_SIZE];
 uint8_t key_tiny[AES_BLOCKLEN], block_tiny[AES_BLOCKLEN];
 unsigned char in_ssl[AES_BLOCK_SIZE], out_ssl[AES_BLOCK_SIZE], key_ssl[AES_BLOCK_SIZE];
-AES_KEY key32_ssl;
+uint8_t in_dhuertas[16], out_dhuertas[16], key_dhuertas[16];
 
+AES_KEY key32_ssl;
 struct AES_ctx ctx_tiny;
+uint8_t ctx_dhuertas;
 
 int seed = 1;
 
@@ -51,7 +56,24 @@ static void AesSslEncryptHandler(void *CallBackRef)
     AES_encrypt(in_ssl, out_ssl, &key32_ssl);
 }
 
-char *weights_to_ascii(char *str, uint32_t *weights, size_t len, char offset)
+static void AesDhuertasEncryptHandler(void *CallBackRef)
+{
+    aes_cipher(in_dhuertas, out_dhuertas, ctx_dhuertas);
+}
+
+
+static void AesDhuertasDecryptHandler(void *CallBackRef)
+{
+    aes_inv_cipher(in_dhuertas, out_dhuertas, ctx_dhuertas);
+}
+
+static vois AesSBoxEncryptHandler(void *CallBackRef)
+{
+    
+}
+
+
+char *weights_to_ascii(char *str, uint32_t *weights, size_t len)
 {
     for (size_t t = 0; t < len; t++)
     {
@@ -88,7 +110,38 @@ char *weights_to_string(char *str, uint32_t *weights, size_t len)
     return str;
 }
 
-void tiny_aes(int inv, int verbose, int end)
+void init_perfcounters (int do_reset, int enable_divider)
+{
+    // in general enable all counters (including cycle counter)
+    int value = 1;
+
+    // peform reset:
+    if (do_reset)
+    {
+        value |= 2;     // reset all counters to zero.
+        value |= 4;     // reset cycle counter to zero.
+    }
+
+    if (enable_divider)
+        value |= 8;     // enable "by 1" divider for CCNT.
+
+    value |= 16;
+
+    // program the performance-counter control-register:
+    asm volatile ("MCR p15, 0, %0, c9, c12, 0\t\n" :: "r"(value));
+
+    // enable all counters:
+    asm volatile ("MCR p15, 0, %0, c9, c12, 1\t\n" :: "r"(0x8000000f));
+
+    // clear overflows:
+    asm volatile ("MCR p15, 0, %0, c9, c12, 3\t\n" :: "r"(0x8000000f));
+
+    // program the performance-counter control-register:
+    asm volatile ("MCR p15, 0, %0, c9, c12, 0\t\n" :: "r"(value));
+}
+
+
+void tiny_aes(int inv, int verbose, int end, int id)
 {
     if (verbose)
     {
@@ -107,14 +160,14 @@ void tiny_aes(int inv, int verbose, int end)
         AES_init_ctx(&ctx_tiny, key_tiny);
     }
 
-    fifo_inst.Mode = XFIFO_MODE_SW;
-    XFIFO_Reset(&fifo_inst);
-    XFIFO_Write(&fifo_inst, end, (XFIFO_WrAction)(inv ? AesTinyDecryptHandler : AesTinyEncryptHandler));
+    fifo_inst[id].Mode = XFIFO_MODE_SW;
+    XFIFO_Reset(&fifo_inst[id]);
+    XFIFO_Write(&fifo_inst[id], end, (XFIFO_WrAction)(inv ? AesTinyDecryptHandler : AesTinyEncryptHandler));
 
     printf("%s: %s;;\n", inv ? "plains" : "ciphers", HEX_bytes_to_string(buffer, block_tiny, AES_BLOCKLEN));
 }
 
-void ssl_aes(int inv, int verbose, int end)
+void ssl_aes(int inv, int verbose, int end, int id)
 {
     if (verbose)
     {
@@ -133,14 +186,34 @@ void ssl_aes(int inv, int verbose, int end)
         AES_set_encrypt_key(key_ssl, 128, &key32_ssl);
     }
 
-    fifo_inst.Mode = XFIFO_MODE_SW;
-    XFIFO_Reset(&fifo_inst);
-    XFIFO_Write(&fifo_inst, end, (XFIFO_WrAction)(inv ? AesSslDecryptHandler : AesSslEncryptHandler));
+    fifo_inst[id].Mode = XFIFO_MODE_SW;
+    XFIFO_Reset(&fifo_inst[id]);
+    XFIFO_Write(&fifo_inst[id], end, (XFIFO_WrAction)(inv ? AesSslDecryptHandler : AesSslEncryptHandler));
 
     printf("%s: %s;;\n", inv ? "plains" : "ciphers", HEX_bytes_to_string(buffer, out_ssl, AES_BLOCK_SIZE));
 }
 
-void hw_aes(int inv, int verbose, int end)
+void dhuertas_aes(int inv, int verbose, int end, int id)
+{
+    if (verbose)
+    {
+        printf("mode: ssl\n");
+        printf("direction: %s\n", inv ? "dec" : "enc");
+        printf("key: %s\n", HEX_bytes_to_string(buffer, key_dhuertas, 16));
+        printf("%s: %s\n", inv ? "ciphers" : "plains", HEX_bytes_to_string(buffer, in_dhuertas, AES_BLOCK_SIZE));
+    }
+
+    free(ctx_dhuertas);
+    ctx_dhuertas = aes_init(16);
+    aes_key_expansion(key_dhuertas, ctx_dhuertas);
+    fifo_inst[id].Mode = XFIFO_MODE_SW;
+    XFIFO_Reset(&fifo_inst[id]);
+    XFIFO_Write(&fifo_inst[id], end, (XFIFO_WrAction)(inv ? AesDhuertasDecryptHandler : AesDhuertasEncryptHandler));
+
+    printf("%s: %s;;\n", inv ? "plains" : "ciphers", HEX_bytes_to_string(buffer, out_dhuertas, AES_BLOCK_SIZE));
+}
+
+void hw_aes(int inv, int verbose, int end, int id)
 {
     if (verbose)
     {
@@ -154,9 +227,9 @@ void hw_aes(int inv, int verbose, int end)
     XAES_SetKey(&aes_inst, key_hw);
     XAES_SetInput(&aes_inst, block_hw);
 
-    fifo_inst.Mode = XFIFO_MODE_HW;
-    XFIFO_Reset(&fifo_inst);
-    XFIFO_Write(&fifo_inst, end, (XFIFO_WrAction)AesHwHandler);
+    fifo_inst[id].Mode = XFIFO_MODE_HW;
+    XFIFO_Reset(&fifo_inst[id]);
+    XFIFO_Write(&fifo_inst[id], end, (XFIFO_WrAction)AesHwHandler);
 
     XAES_GetOutput(&aes_inst, block_hw);
     printf("%s: %s;;\n", inv ? "plains" : "ciphers", HEX_words_to_string(buffer, block_hw, XAES_WORDS_SIZE));
@@ -170,27 +243,35 @@ CMD_err_t *aes(const CMD_cmd_t *cmd)
     int inv = CMD_opt_find(cmd->options, 'i') != -1;
     int verbose = CMD_opt_find(cmd->options, 'v') != -1;
     int end = CMD_opt_find(cmd->options, 'e');
+    int id = CMD_opt_find(cmd->options, 'c');
     char *mode = cmd->options[mode_idx].value.string;
 
     end = end != -1 ? cmd->options[end].value.integer : XFIFO_ConfigTable[0].Depth;
-
+    id = id != -1 ? cmd->options[id].value.integer : 0;
+    
     if (!strcmp(mode, "hw"))
     {
         HEX_bytes_to_words(key_hw, cmd->options[key_idx].value.bytes, XAES_BYTES_SIZE);
         HEX_bytes_to_words(block_hw, cmd->options[data_idx].value.bytes, XAES_BYTES_SIZE);
-        hw_aes(inv, verbose, end);
+        hw_aes(inv, verbose, end, id);
     }
     else if (!strcmp(mode, "tiny"))
     {
         memcpy(key_tiny, cmd->options[key_idx].value.bytes, AES_BLOCKLEN);
         memcpy(block_tiny, cmd->options[data_idx].value.bytes, AES_BLOCKLEN);
-        tiny_aes(inv, verbose, end);
+        tiny_aes(inv, verbose, end, id);
     }
     else if (!strcmp(mode, "ssl"))
     {
         memcpy(key_ssl, cmd->options[key_idx].value.bytes, AES_BLOCK_SIZE);
         memcpy(in_ssl, cmd->options[data_idx].value.bytes, AES_BLOCK_SIZE);
-        ssl_aes(inv, verbose, end);
+        ssl_aes(inv, verbose, end, id);
+    }
+    else if (!strcmp(mode, "dhuertas"))
+    {
+        memcpy(key_dhuertas, cmd->options[key_idx].value.bytes, AES_BLOCK_SIZE);
+        memcpy(in_dhuertas, cmd->options[data_idx].value.bytes, AES_BLOCK_SIZE);
+        dhuertas_aes(inv, verbose, end, id);
     }
     else
     {
@@ -198,7 +279,7 @@ CMD_err_t *aes(const CMD_cmd_t *cmd)
     }
     return NULL;
 }
-
+/*
 CMD_err_t *tdc(const CMD_cmd_t *cmd)
 {
     int calibrate_idx = CMD_opt_find(cmd->options, 'c');
@@ -241,7 +322,7 @@ CMD_err_t *tdc(const CMD_cmd_t *cmd)
 
     return NULL;
 }
-/*
+*/
 CMD_err_t *ro(const CMD_cmd_t *cmd)
 {
     int raw_idx = CMD_opt_find(cmd->options, 'r');
@@ -257,23 +338,21 @@ CMD_err_t *ro(const CMD_cmd_t *cmd)
     }
     else
     {
-        printf("value: %08lx\n", XRO_Read(ro_inst.Config.BaseAddr));
+        printf("value: %ld\n", XRO_ReadData(ro_inst.Config.BaseAddr));
     }
 
     return NULL;
 }
-*/
 
-void fifo_flush()
+void fifo_flush(int id)
 {
-    XFIFO_Reset(&fifo_inst);
+    XFIFO_Reset(&fifo_inst[id]);
 }
 
-void fifo_read(int verbose, int start, int end)
+void fifo_read(int id, int verbose, int start, int end)
 {
     uint32_t *weights = malloc(32 * (end - start));
-    int len = XFIFO_Read(&fifo_inst, weights, (uint32_t)start, (uint32_t)end, 1);
-    char offset = XTDC_Offset(XTDC_ConfigTable[0].Count, XTDC_ConfigTable[0].Depth);
+    int len = XFIFO_Read(&fifo_inst[id], weights, (uint32_t)start, (uint32_t)end, 1);
 
     printf("samples: %d;;\n", len);
     if (len == 0)
@@ -287,17 +366,17 @@ void fifo_read(int verbose, int start, int end)
     }
     else
     {
-        printf("code: %s;;\n", weights_to_ascii(str, weights, len, offset));
+        printf("code: %s;;\n", weights_to_ascii(str, weights, len));
     }
     free(str);
     free(weights);
 }
 
-void fifo_acquire(int end)
+void fifo_acquire(int id, int end)
 {
-    fifo_inst.Mode = XFIFO_MODE_SW;
-    XFIFO_Reset(&fifo_inst);
-    XFIFO_Write(&fifo_inst, end, NULL);
+    fifo_inst[id].Mode = XFIFO_MODE_SW;
+    XFIFO_Reset(&fifo_inst[id]);
+    XFIFO_Write(&fifo_inst[id], end, NULL);
 }
 
 CMD_err_t *fifo(const CMD_cmd_t *cmd)
@@ -307,21 +386,23 @@ CMD_err_t *fifo(const CMD_cmd_t *cmd)
     int acquire = CMD_opt_find(cmd->options, 'a') != -1;
     int start = CMD_opt_find(cmd->options, 's');
     int end = CMD_opt_find(cmd->options, 'e');
+    int id = CMD_opt_find(cmd->options, 'c');
 
     start = start != -1 ? cmd->options[start].value.integer : 0;
     end = end != -1 ? cmd->options[end].value.integer : XFIFO_ConfigTable[0].Depth;
+    id = id != -1 ? cmd->options[id].value.integer : 0;
 
     if (flush)
     {
-        fifo_flush();
+        fifo_flush(id);
     }
 
     if (acquire)
     {
-        fifo_acquire(end);
+        fifo_acquire(id, end);
     }
 
-    fifo_read(verbose, start, end);
+    fifo_read(id, verbose, start, end);
     return NULL;
 }
 
@@ -334,17 +415,20 @@ CMD_err_t *sca(const CMD_cmd_t *cmd)
     int mode_idx = CMD_opt_find(cmd->options, 'm');
     int start = CMD_opt_find(cmd->options, 's');
     int end = CMD_opt_find(cmd->options, 'e');
+    int id = CMD_opt_find(cmd->options, 'c');
     char *mode = cmd->options[mode_idx].value.string;
 
     HEX_random_words(key_hw, INT_MAX, XAES_WORDS_SIZE);
     HEX_words_to_bytes(key_tiny, key_hw, AES_BLOCKLEN);
     memcpy(key_ssl, key_hw, AES_BLOCK_SIZE);
+    memcpy(key_dhuertas, key_hw, AES_BLOCK_SIZE);
 
     start = start != -1 ? cmd->options[start].value.integer : 0;
     end = end != -1 ? cmd->options[end].value.integer : XFIFO_ConfigTable[0].Depth;
+    id = id != -1 ? cmd->options[id].value.integer : 0;
 
-    printf("sensors: %d;;\n", XTDC_ConfigTable[0].Count);
-    printf("target: %d;;\n", XTDC_Offset(1, XTDC_ConfigTable[0].Depth));
+    printf("sensors: %d;;\n", XRO_ConfigTable[0].Count);
+    printf("target: %d;;\n", 0);
     printf("mode: %s;;\n", mode);
     printf("direction: %s;;\n", inv ? "dec" : "enc");
     printf("keys: %s;;\n", HEX_words_to_string(buffer, key_hw, XAES_WORDS_SIZE));
@@ -354,34 +438,39 @@ CMD_err_t *sca(const CMD_cmd_t *cmd)
         if (raw)
         {
             printf("\xfd\xfd\xfd\xfd;;\n");
-            fifo_acquire(end);
-            fifo_read(verbose, start, end);
+            fifo_acquire(id, end);
+            fifo_read(id, verbose, start, end);
         }
         printf("\xfe\xfe\xfe\xfe;;\n");
         HEX_random_words(block_hw, seed, XAES_WORDS_SIZE);
         printf("%s: %s;;\n", inv ? "ciphers" : "plains", HEX_words_to_string(buffer, block_hw, XAES_WORDS_SIZE));
         if (!strcmp(mode, "hw"))
         {
-            hw_aes(inv, verbose, end);
+            hw_aes(inv, verbose, end, id);
         }
         else if (!strcmp(mode, "tiny"))
         {
             HEX_words_to_bytes(block_tiny, block_hw, AES_BLOCKLEN);
-            tiny_aes(inv, verbose, end);
+            tiny_aes(inv, verbose, end, id);
         }
         else if (!strcmp(mode, "ssl"))
         {
             memcpy(in_ssl, block_hw, AES_BLOCK_SIZE);
-            ssl_aes(inv, verbose, end);
+            ssl_aes(inv, verbose, end, id);
+        }
+        else if (!strcmp(mode, "dhuertas"))
+        {
+            memcpy(in_dhuertas, block_hw, AES_BLOCK_SIZE);
+            ssl_aes(inv, verbose, end, id);
         }
         else
         {
             printf("unrecognized encryption mode: %s", mode);
         }
-        fifo_read(verbose, start, end);
+        fifo_read(id, verbose, start, end);
         seed++;
     }
-    fifo_flush();
+    fifo_flush(id);
     printf("\xff\xff\xff\xff;;\n");
     return NULL;
 }
