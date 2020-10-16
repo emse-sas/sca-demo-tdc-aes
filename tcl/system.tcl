@@ -1118,7 +1118,6 @@ proc create_root_design { parentCell } {
   # Create address segments
   assign_bd_address -offset 0x43C00000 -range 0x00010000 -target_address_space [get_bd_addr_spaces processing_system7_0/Data] [get_bd_addr_segs aes_0/S_AXI/S_AXI_reg] -force
   assign_bd_address -offset 0x43C20000 -range 0x00010000 -target_address_space [get_bd_addr_spaces processing_system7_0/Data] [get_bd_addr_segs fifo_ctrl_0/S_AXI/S_AXI_reg] -force
-  assign_bd_address -offset 0x43C10000 -range 0x00010000 -target_address_space [get_bd_addr_spaces processing_system7_0/Data] [get_bd_addr_segs tdc_bank_0/S_AXI/S_AXI_reg] -force
 
 
   # Restore current instance

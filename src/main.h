@@ -9,15 +9,23 @@
 #include "xparameters.h"
 #include "xaes.h"
 #include "xfifo.h"
+#ifdef SCABOX_TDC
+#include "xtdc.h"
+#endif
+#ifdef SCABOX_RO
 #include "xro.h"
+#endif
 
-// #include "xtdc.h"
 #define SCA_PROJECT_VERSION "1.1.0"
 
 XAES aes_inst;
 XFIFO fifo_inst[2];
-// XTDC tdc_inst;
+#ifdef SCABOX_TDC
+XTDC tdc_inst;
+#endif
+#ifdef SCABOX_RO
 XRO ro_inst;
+#endif
 
 char buffer[512];
 uint32_t key_hw[XAES_WORDS_SIZE], block_hw[XAES_WORDS_SIZE];
@@ -61,7 +69,6 @@ static void AesDhuertasEncryptHandler(void *CallBackRef)
     aes_cipher(in_dhuertas, out_dhuertas, ctx_dhuertas);
 }
 
-
 static void AesDhuertasDecryptHandler(void *CallBackRef)
 {
     aes_inv_cipher(in_dhuertas, out_dhuertas, ctx_dhuertas);
@@ -69,9 +76,7 @@ static void AesDhuertasDecryptHandler(void *CallBackRef)
 
 static vois AesSBoxEncryptHandler(void *CallBackRef)
 {
-    
 }
-
 
 char *weights_to_ascii(char *str, uint32_t *weights, size_t len)
 {
@@ -110,7 +115,7 @@ char *weights_to_string(char *str, uint32_t *weights, size_t len)
     return str;
 }
 
-void init_perfcounters (int do_reset, int enable_divider)
+void init_perfcounters(int do_reset, int enable_divider)
 {
     // in general enable all counters (including cycle counter)
     int value = 1;
@@ -118,28 +123,27 @@ void init_perfcounters (int do_reset, int enable_divider)
     // peform reset:
     if (do_reset)
     {
-        value |= 2;     // reset all counters to zero.
-        value |= 4;     // reset cycle counter to zero.
+        value |= 2; // reset all counters to zero.
+        value |= 4; // reset cycle counter to zero.
     }
 
     if (enable_divider)
-        value |= 8;     // enable "by 1" divider for CCNT.
+        value |= 8; // enable "by 1" divider for CCNT.
 
     value |= 16;
 
     // program the performance-counter control-register:
-    asm volatile ("MCR p15, 0, %0, c9, c12, 0\t\n" :: "r"(value));
+    asm volatile("MCR p15, 0, %0, c9, c12, 0\t\n" ::"r"(value));
 
     // enable all counters:
-    asm volatile ("MCR p15, 0, %0, c9, c12, 1\t\n" :: "r"(0x8000000f));
+    asm volatile("MCR p15, 0, %0, c9, c12, 1\t\n" ::"r"(0x8000000f));
 
     // clear overflows:
-    asm volatile ("MCR p15, 0, %0, c9, c12, 3\t\n" :: "r"(0x8000000f));
+    asm volatile("MCR p15, 0, %0, c9, c12, 3\t\n" ::"r"(0x8000000f));
 
     // program the performance-counter control-register:
-    asm volatile ("MCR p15, 0, %0, c9, c12, 0\t\n" :: "r"(value));
+    asm volatile("MCR p15, 0, %0, c9, c12, 0\t\n" ::"r"(value));
 }
-
 
 void tiny_aes(int inv, int verbose, int end, int id)
 {
@@ -248,7 +252,7 @@ CMD_err_t *aes(const CMD_cmd_t *cmd)
 
     end = end != -1 ? cmd->options[end].value.integer : XFIFO_ConfigTable[0].Depth;
     id = id != -1 ? cmd->options[id].value.integer : 0;
-    
+
     if (!strcmp(mode, "hw"))
     {
         HEX_bytes_to_words(key_hw, cmd->options[key_idx].value.bytes, XAES_BYTES_SIZE);
@@ -279,7 +283,7 @@ CMD_err_t *aes(const CMD_cmd_t *cmd)
     }
     return NULL;
 }
-/*
+#ifdef SCABOX_TDC
 CMD_err_t *tdc(const CMD_cmd_t *cmd)
 {
     int calibrate_idx = CMD_opt_find(cmd->options, 'c');
@@ -322,7 +326,8 @@ CMD_err_t *tdc(const CMD_cmd_t *cmd)
 
     return NULL;
 }
-*/
+#endif
+#ifdef SCABOX_RO
 CMD_err_t *ro(const CMD_cmd_t *cmd)
 {
     int raw_idx = CMD_opt_find(cmd->options, 'r');
@@ -343,6 +348,7 @@ CMD_err_t *ro(const CMD_cmd_t *cmd)
 
     return NULL;
 }
+#endif
 
 void fifo_flush(int id)
 {
