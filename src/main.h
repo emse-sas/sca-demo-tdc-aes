@@ -34,7 +34,7 @@ unsigned char in_ssl[AES_BLOCK_SIZE], out_ssl[AES_BLOCK_SIZE], key_ssl[AES_BLOCK
 uint8_t in_dhuertas[16], out_dhuertas[16], key_dhuertas[16];
 
 AES_KEY key32_ssl;
-uint8_t ctx_dhuertas;
+uint8_t* ctx_dhuertas;
 
 int seed = 1;
 
