@@ -4,3 +4,6 @@
 [submodule "modules/tiny-cmd"]
 	path = modules/tiny-cmd
 	url = https://github.com/samiBendou/tiny-cmd
+[submodule "modules/AES"]
+	path = modules/AES
+	url = https://github.com/dhuertas/AES
