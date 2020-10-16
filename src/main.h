@@ -464,7 +464,7 @@ CMD_err_t *sca(const CMD_cmd_t *cmd)
         else if (!strcmp(mode, "dhuertas"))
         {
             memcpy(in_dhuertas, block_hw, AES_BLOCK_SIZE);
-            ssl_aes(inv, verbose, end, id);
+            dhuertas_aes(inv, verbose, end, id);
         }
         else
         {
