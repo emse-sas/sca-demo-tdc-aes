@@ -1,11 +1,11 @@
-ocSCABox Acquisition Demo
+SCABox Acquisition Demo
 ***************************************************************
 
 Overview
 ===============================================================
 
-This repository contains a demo design and application for side-channel acquisition of the 
-`SCABox <https://samibendou.github.io/sca_framework/>`_ project
+This repository contains a demo design and application for side-channel acquisition. 
+It is part of the `SCABox <https://samibendou.github.io/sca_framework/>`_ project.
 
 Features
 ===============================================================
@@ -28,17 +28,12 @@ Embedded
 Install
 ===============================================================
 
-In order to install this demo you must clone this repository
+In order to install this demo you must clone this repository and the SCABox `IP repository <https://github.com/samiBendou/sca-ip/>`_.
 
 .. code-block:: shell
-
-    $ git clone --recursive https://github.com/samiBendou/sca-demo-tdc-aes
-
-You will also need to download the SCABox `IP repository <https://github.com/samiBendou/sca-ip/>`_.
-
-.. code-block:: shell
-
+    
     $ git clone https://github.com/samiBendou/sca-ip
+    $ git clone --recursive https://github.com/samiBendou/sca-demo-tdc-aes
 
 Once it is done, you can get started with the `installation tutorial <https://samibendou.github.io/sca_framework/tuto/installation.html>`_.
 
