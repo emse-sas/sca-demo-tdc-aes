@@ -31,7 +31,7 @@ Install
 In order to install this demo you must clone this repository and the SCABox `IP repository <https://github.com/samiBendou/sca-ip/>`_.
 
 .. code-block:: shell
-    
+
     $ git clone https://github.com/samiBendou/sca-ip
     $ git clone --recursive https://github.com/samiBendou/sca-demo-tdc-aes
 
@@ -40,13 +40,13 @@ Once it is done, you can get started with the `installation tutorial <https://sa
 Usage
 ===============================================================
 
-The a demo with an example FPGA design that implements a sensor and a crypto-core.
+The demo contains an example FPGA design that implements a sensor and a crypto-core.
 
-The demo is driven by a C application allowing the user to input commands to run synchronous acquisition.
+It is is driven by a C application allowing the user to input commands to run synchronous acquisition.
 
-The data is printed into the UART in order to be retrieve in your computer.
+The data is printed into a serial port in order to be retrieve in your computer.
 
-If you want to perform an acquisition using this demo follow the `acquisition tutorial <https://samibendou.github.io/sca_framework/tuto/acquisition.html>`_.
+If you want to launch this demo follow the `acquisition tutorial <https://samibendou.github.io/sca_framework/tuto/acquisition.html>`_.
 
 More
 ===============================================================
