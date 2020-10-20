@@ -1,4 +1,4 @@
-SCABox Acquisition Demo
+ocSCABox Acquisition Demo
 ***************************************************************
 
 Overview
