@@ -21,6 +21,7 @@ Embedded
 ---------------------------------------------------------------
 
 - Debug and acquisition CLI application
+- Serialization of acquisition data
 - `Tiny-AES <https://github.com/kokke/tiny-AES-c>`_
 - `OpenSSL AES <https://www.openssl.org/>`_
 - `Dhuertas AES <https://github.com/dhuertas/AES>`_
