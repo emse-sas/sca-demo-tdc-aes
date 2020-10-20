@@ -34,8 +34,13 @@ In order to install this demo you must clone this repository
 
     $ git clone --recursive https://github.com/samiBendou/sca-demo-tdc-aes
 
-Once it is done, you can get started with the `installation tutorial<https://samibendou.github.io/sca_framework/tuto/installation.html>`_.
+You will also need to download the SCABox `IP repository <https://github.com/samiBendou/sca-ip/>`.
 
+.. code-block:: shell
+
+    $ git clone https://github.com/samiBendou/sca-ip
+
+Once it is done, you can get started with the `installation tutorial <https://samibendou.github.io/sca_framework/tuto/installation.html>`_.
 
 Usage
 ===============================================================
