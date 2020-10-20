@@ -1,5 +1,9 @@
-oc:SCABox Acquisition Demo
+SCABox Acquisition Demo
 ***************************************************************
+
+.. image:: https://img.shields.io/github/license/samiBendou/sca-demo-tdc-aes
+    :target: https://choosealicense.com/licenses/mit/
+    :alt: license
 
 Overview
 ===============================================================
@@ -79,4 +83,4 @@ a very heterogeneous technical stack, it is difficult to maintain the quality wi
 License
 ---------------------------------------------------------------
 
-All the contents of the SCABox project are licensed under the `MIT license <https://choosealicense.com/licenses/mit/>` provided in each GitHub repository.
+All the contents of the SCABox project are licensed under the `MIT license <https://choosealicense.com/licenses/mit/>`_ provided in each GitHub repository.
