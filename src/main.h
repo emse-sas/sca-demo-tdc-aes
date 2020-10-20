@@ -32,6 +32,7 @@ uint32_t key_hw[XAES_WORDS_SIZE], block_hw[XAES_WORDS_SIZE];
 uint8_t key_tiny[16], in_tiny[16], out_tiny[16];
 unsigned char in_ssl[AES_BLOCK_SIZE], out_ssl[AES_BLOCK_SIZE], key_ssl[AES_BLOCK_SIZE];
 uint8_t in_dhuertas[16], out_dhuertas[16], key_dhuertas[16];
+int t_start, t_end;
 
 AES_KEY key32_ssl;
 uint8_t* ctx_dhuertas;
@@ -65,7 +66,10 @@ static void AesSslEncryptHandler(void *CallBackRef)
 
 static void AesDhuertasEncryptHandler(void *CallBackRef)
 {
+    asm volatile ("MRC p15, 0, %0, c9, c13, 0\t\n": "=r"(t_start));
     aes_cipher(in_dhuertas, out_dhuertas, ctx_dhuertas);
+    asm volatile ("MRC p15, 0, %0, c9, c13, 0\t\n": "=r"(t_end));
+
 }
 
 static void AesDhuertasDecryptHandler(void *CallBackRef)
@@ -472,6 +476,7 @@ CMD_err_t *sca(const CMD_cmd_t *cmd)
         }
         fifo_read(id, verbose, start, end);
         seed++;
+        printf(é)
     }
     fifo_flush(id);
     printf("\xff\xff\xff\xff;;\n");
