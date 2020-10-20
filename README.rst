@@ -1,9 +1,63 @@
----------------------------------------------------------------
-sca-demo-tdc-aes
+SCABox Acquisition Demo
+***************************************************************
+
+Overview
+===============================================================
+
+This repository contains a demo design and application for side-channel acquisition of the 
+`SCABox <https://samibendou.github.io/sca_framework/>`_ project
+
+Features
+===============================================================
+
+Block Design
 ---------------------------------------------------------------
 
-The demo provides an example FPGA design containing a sensor and a crypto-core communicating with C command prompt application
-that runs on the SoC. The demo is able to capture the side-channel leakage and transmit it via UART.
+- Time-to-Digital Converter based sensor (TDC)
+- Advanced Encryption Standard (AES)
+- Manual placement for sensors
 
-The demo provides a protocol to communicate side-channel data for evaluation purposes.
-The exact standard is detailed here and can be reused to build your own C acquisition application.
+Embedded
+---------------------------------------------------------------
+
+- Debug and acquisition CLI application
+- `Tiny-AES <https://github.com/kokke/tiny-AES-c>`_
+- `OpenSSL AES <https://www.openssl.org/>`_
+- `Dhuertas AES <https://github.com/dhuertas/AES>`_
+
+Install
+===============================================================
+
+In order to install this demo you must clone this repository
+
+.. code-block:: shell
+
+    $ git clone --recursive https://github.com/samiBendou/sca-demo-tdc-aes
+
+Once it is done, you can get started with the `installation tutorial<https://samibendou.github.io/sca_framework/tuto/installation.html>`_.
+
+
+Usage
+===============================================================
+
+The a demo with an example FPGA design that implements a sensor and a crypto-core.
+The demo is driven by a C application allowing the user to input commands to run synchronous acquisition.
+The data is printed into the UART in order to be retrieve in your computer.
+
+If you want to perform an acquisition using this demo follow the `acquisition tutorial <https://samibendou.github.io/sca_framework/tuto/acquisition.html>`_.
+
+More
+===============================================================
+
+SCABox is a project on the topic of side-channel analysis.
+The goal of SCABox is to provide a cheap and efficient test-bench for side-channel analysis.
+
+To know more about SCABox please visit our `website <https://samibendou.github.io/sca_framework/>`_.
+It provides a tutorials and a wiki about side-channel analysis.
+
+SCABox is an open-source project, all the sources are hosted on GitHub
+
+- `IP repository <https://github.com/samiBendou/sca-ip/>`_
+- `Acquisition demo <https://github.com/samiBendou/sca-demo-tdc-aes/>`_
+- `Attack demo <https://github.com/samiBendou/sca-automation/>`_
+- `SCABox website  <https://github.com/samiBendou/sca_framework/>`_
