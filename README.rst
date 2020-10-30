@@ -1,15 +1,17 @@
 SCABox Acquisition Demo
 ***************************************************************
 
-.. image:: https://img.shields.io/github/license/samiBendou/sca-demo-tdc-aes
+.. image:: https://img.shields.io/github/license/emse-sas/sca-demo-tdc-aes
     :target: https://choosealicense.com/licenses/mit/
     :alt: license
+
+`Website <https://emse-sas.github.io/sca-demo-tdc-aes/>`_
 
 Overview
 ===============================================================
 
 This repository contains a demo design and application for side-channel acquisition. 
-It is part of the `SCABox <https://samibendou.github.io/sca_framework/>`_ project.
+It is part of the `SCABox <https://emse-sas.github.io/sca_framework/>`_ project.
 
 Features
 ===============================================================
@@ -33,14 +35,14 @@ Embedded
 Install
 ===============================================================
 
-In order to install this demo you must clone this repository and the SCABox `IP repository <https://github.com/samiBendou/sca-ip/>`_.
+In order to install this demo you must clone this repository and the SCABox `IP repository <https://github.com/emse-sas/sca-ip/>`_.
 
 .. code-block:: shell
 
-    $ git clone https://github.com/samiBendou/sca-ip
-    $ git clone --recursive https://github.com/samiBendou/sca-demo-tdc-aes
+    $ git clone https://github.com/emse-sas/sca-ip
+    $ git clone --recursive https://github.com/emse-sas/sca-demo-tdc-aes
 
-Once it is done, you can get started with the `installation tutorial <https://samibendou.github.io/sca_framework/tuto/installation.html>`_.
+Once it is done, you can get started with the `installation tutorial <https://emse-sas.github.io/sca_framework/tuto/installation.html>`_.
 
 Usage
 ===============================================================
@@ -51,7 +53,7 @@ It is is driven by a C application allowing the user to input commands to run sy
 
 The data is printed into a serial port in order to be retrieve in your computer.
 
-If you want to launch this demo follow the `acquisition tutorial <https://samibendou.github.io/sca_framework/tuto/acquisition.html>`_.
+If you want to launch this demo follow the `acquisition tutorial <https://emse-sas.github.io/sca_framework/tuto/acquisition.html>`_.
 
 More
 ===============================================================
@@ -59,15 +61,15 @@ More
 SCABox is a project on the topic of side-channel analysis.
 The goal of SCABox is to provide a cheap and efficient test-bench for side-channel analysis.
 
-To know more about SCABox please visit our `website <https://samibendou.github.io/sca_framework/>`_.
+To know more about SCABox please visit our `website <https://emse-sas.github.io/sca_framework/>`_.
 It provides a tutorials and a wiki about side-channel analysis.
 
 SCABox is an open-source project, all the sources are hosted on GitHub
 
-- `IP repository <https://github.com/samiBendou/sca-ip/>`_
-- `Acquisition demo <https://github.com/samiBendou/sca-demo-tdc-aes/>`_
-- `Attack demo <https://github.com/samiBendou/sca-automation/>`_
-- `SCABox website  <https://github.com/samiBendou/sca_framework/>`_
+- `IP repository <https://github.com/emse-sas/sca-ip/>`_
+- `Acquisition demo <https://github.com/emse-sas/sca-demo-tdc-aes/>`_
+- `Attack demo <https://github.com/emse-sas/sca-automation/>`_
+- `SCABox website  <https://github.com/emse-sas/sca_framework/>`_
 
 Contributing
 ---------------------------------------------------------------

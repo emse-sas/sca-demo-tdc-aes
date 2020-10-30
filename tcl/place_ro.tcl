@@ -8,6 +8,7 @@ set RO_INC_X 0
 # Y slice offset increment per ro, must be multiple of 8
 set RO_INC_Y 1
 
+# Please modify accodignly to your block design
 set RO_DEPTH_SENSORS 8
 set RO_COUNT_SENSORS 16
 
